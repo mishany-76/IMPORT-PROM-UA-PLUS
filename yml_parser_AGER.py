@@ -77,7 +77,7 @@ class FeedProcessor:
         try:
             # Получаем пароль (User-Agent) из секретов GitHub
             # Если секрета нет, используем нейтральный заголовок, чтобы не светить 'python-requests'
-            user_agent = os.environ.get("AGER_USER_AGENT", "Data-Sync-Service-v2")
+            user_agent = os.environ.get("AGER_PLUS_USER_AGENT") or os.environ.get("AGER_USER_AGENT", "Data-Sync-Service-v2")
 
             headers = {'User-Agent': user_agent}
             
@@ -931,10 +931,10 @@ class FeedProcessor:
 if __name__ == "__main__":
     # Configuration
     # Получаем ID таблицы из секретов (переменных окружения)
-    SPREADSHEET_ID = os.environ.get("PARS_AGER_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ_ПОСТАВЩИКА")
+    SPREADSHEET_ID = os.environ.get("PARS_AGER_PLUS_SPREADSHEET_ID") or os.environ.get("PARS_AGER_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ_ПОСТАВЩИКА")
 
     # Пробуем взять ссылку из секретов GitHub, если её нет — используем пустой список или тестовую ссылку
-    ager_url = os.environ.get("AGER_FEED_URL")
+    ager_url = os.environ.get("AGER_FEED_PLUS_URL") or os.environ.get("AGER_FEED_URL")
 
     if ager_url:
         FEEDS = [ager_url]

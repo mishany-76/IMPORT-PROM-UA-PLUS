@@ -914,10 +914,10 @@ class FeedProcessor:
 if __name__ == "__main__":
     # Configuration
     # 1. Прячем ID таблицы
-    SPREADSHEET_ID = os.environ.get("PARS_BAGSROOM_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ_ПОСТАВЩИКА")
+    SPREADSHEET_ID = os.environ.get("PARS_BAGSROOM_PLUS_SPREADSHEET_ID") or os.environ.get("PARS_BAGSROOM_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ_ПОСТАВЩИКА")
 
     # 2. Прячем ссылку на фид
-    bagsroom_url = os.environ.get("BAGSROOM_FEED_URL")
+    bagsroom_url = os.environ.get("BAGSROOM_PLUS_FEED_URL") or os.environ.get("BAGSROOM_FEED_URL")
 
     if bagsroom_url:
         # Если секрет найден, подставляем его в список

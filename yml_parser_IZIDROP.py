@@ -900,10 +900,10 @@ class FeedProcessor:
 if __name__ == "__main__":
     # Configuration
     # 1. Прячем ID таблицы
-    SPREADSHEET_ID = os.environ.get("PARS_IZIDROP_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ_ПОСТАВЩИКА")
+    SPREADSHEET_ID = os.environ.get("PARS_IZIDROP_PLUS_SPREADSHEET_ID") or os.environ.get("PARS_IZIDROP_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ_ПОСТАВЩИКА")
 
     # 2. Прячем ссылку на фид
-    izidrop_url = os.environ.get("IZIDROP_FEED_URL")
+    izidrop_url = os.environ.get("IZIDROP_PLUS_FEED_URL") or os.environ.get("IZIDROP_FEED_URL")
 
     if izidrop_url:
         FEEDS = [izidrop_url]

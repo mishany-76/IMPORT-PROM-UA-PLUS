@@ -874,22 +874,22 @@ class FeedProcessor:
 
 if __name__ == "__main__":
     # Configuration
-    # 1. Прячем ID таблицы
-    SPREADSHEET_ID = os.environ.get("PARS_MOYDROP_SPREADSHEET_ID", "10PRDnJY5MUCBp_9ltnbFaqR8UYk3Vs")
+    # 1. Загрузка ID таблицы
+    SPREADSHEET_ID = os.environ.get("PARS_BAYRAKTAR_PLUS_SPREADSHEET_ID") or os.environ.get("PARS_BAYRAKTAR_SPREADSHEET_ID", "PARS_BAYRAKTAR_PLUS_SPREADSHEET_ID")
 
-    # 2. Прячем ссылку на фид
-    moydrop_url = os.environ.get("MOYDROP_FEED_URL")
+    # 2. Загрузка ссылки на фид
+    bayraktar_url = os.environ.get("BAYRAKTAR_PLUS_FEED_URL") or os.environ.get("BAYRAKTAR_FEED_URL")
 
-    if moydrop_url:
-        # Если секрет найден, подставляем его в список
-        FEEDS = [moydrop_url]
-        logger.info("URL поставщика MOYDROP успешно получен из секретов.")
+    if bayraktar_url:
+        # Если ссылка есть в секретах, используем её
+        FEEDS = [bayraktar_url]
+        logger.info("URL фида BAYRAKTAR успешно загружен из секретов.")
     else:
-        # Если секрета нет (запуск на компе), используем эту ссылку
+        # Если ссылки нет (например, локальный запуск), используем дефолтную
         FEEDS = [
-            "https://backend.mydrop.com.ua/vendor/api/export/products/prom/yml?"
+            "https://backend.mydrop.com.ua/vendor/api/export/products/prom/yml?public_api_key=eb5ce830b3a54f0afeeb4967e807800e3c6c2ab2&price_field=drop_price&increase_price_type=percent&increase_price_value=35&param_name=Размер&stock_sync=true&category_id=33621,88863,33630,81779,82947,81777,81797,134414,139160"
         ]
-        logger.warning("Предупреждение: Ссылка MOYDROP не найдена в секретах, используем локальное значение.")
+        logger.warning("ВНИМАНИЕ: Ссылка BAYRAKTAR не найдена в секретах, используется резервная.")
 
     processor = FeedProcessor(SPREADSHEET_ID, FEEDS)
     processor.run()

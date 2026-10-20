@@ -875,10 +875,10 @@ class FeedProcessor:
 if __name__ == "__main__":
     # Configuration
     # 1. Прячем ID таблицы
-    SPREADSHEET_ID = os.environ.get("PARS_MOYDROP_SPREADSHEET_ID", "10PRDnJY5MUCBp_9ltnbFaqR8UYk3Vs")
+    SPREADSHEET_ID = os.environ.get("PARS_MOYDROP_PLUS_SPREADSHEET_ID") or os.environ.get("PARS_MOYDROP_SPREADSHEET_ID", "10PRDnJY5MUCBp_9ltnbFaqR8UYk3Vs")
 
     # 2. Прячем ссылку на фид
-    moydrop_url = os.environ.get("MOYDROP_FEED_URL")
+    moydrop_url = os.environ.get("MOYDROP_PLUS_FEED_URL") or os.environ.get("MOYDROP_FEED_URL")
 
     if moydrop_url:
         # Если секрет найден, подставляем его в список

@@ -502,11 +502,11 @@ class FeedProcessor:
 if __name__ == "__main__":
     # Получаем ID целевой таблицы (куда копируем)
     # ИСПРАВЛЕНО: Теперь ищем секрет PARS_FOOTBALLERS_SPREADSHEET_ID
-    TARGET_SPREADSHEET_ID = os.environ.get("PARS_FOOTBALLERS_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ")
+    TARGET_SPREADSHEET_ID = os.environ.get("PARS_FOOTBALLERS_PLUS_SPREADSHEET_ID") or os.environ.get("PARS_FOOTBALLERS_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ")
     
     # Получаем ID исходной таблицы (откуда копируем)
     # ИСПРАВЛЕНО: Теперь ищем секрет FOOTBALLERS_FEED_SPREADSHEET_ID
-    SOURCE_SPREADSHEET_ID = os.environ.get("FOOTBALLERS_FEED_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ_ПОСТАВЩИКА")
+    SOURCE_SPREADSHEET_ID = os.environ.get("FOOTBALLERS_PLUS_FEED_SPREADSHEET_ID") or os.environ.get("FOOTBALLERS_FEED_SPREADSHEET_ID", "ВАШ_ID_ТАБЛИЦЫ_ПОСТАВЩИКА")
 
     processor = FeedProcessor(
         target_spreadsheet_id=TARGET_SPREADSHEET_ID,
