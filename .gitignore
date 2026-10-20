@@ -1,0 +1,10 @@
+# Секреты
+user.txt
+key_sheet.json
+
+# Логи
+*.log
+
+# Python
+__pycache__/
+.venv/
