@@ -28,15 +28,15 @@ TARGET_COLUMN = "Import_Subscribers"  # Название столбца для �
 # Словарь: скрипт → пауза в секундах ПОСЛЕ его выполнения (перед следующим скриптом).
 # Большая пауза перед import_script_0.py достигается через паузу после yml_parser_AGER.py (последний парсер).
 SCRIPTS_TO_RUN = {
-    "yml_parser_FOOTBALLERS.py": 60,
+    #"yml_parser_FOOTBALLERS.py": 60,
     #"yml_parser_SPECULANT.py": 60,
-    "yml_parser_KIRS.py": 60,
-    "yml_parser_MOYDROP.py": 60,
-    "yml_parser_BAYRAKTAR.py": 60,
-    "yml_parser_IZIDROP.py": 60,
-    "yml_parser_BAGSROOM.py": 60,
-    "yml_parser_AGER.py": 70,
-    #"import_script_0.py": 90,
+    #"yml_parser_KIRS.py": 60,
+    #"yml_parser_MOYDROP.py": 60,
+    #"yml_parser_BAYRAKTAR.py": 60,
+    #"yml_parser_IZIDROP.py": 60,
+    #"yml_parser_BAGSROOM.py": 60,
+    #"yml_parser_AGER.py": 70,
+    "import_script_0.py": 90,
     #"IMPORT_PROM_UA.py": 60,
     #"Product_Correction.py": 10,
     #"SYNC_HEAVY_PROM_UA.py": 10,
