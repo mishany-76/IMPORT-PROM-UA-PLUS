@@ -1,0 +1,35 @@
+name: Test Heavy Sync Only
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync_heavy:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout repository content
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Recreate secret files
+        run: |
+          echo "${{ secrets.USER_EMAIL }}" > user.txt
+          echo '${{ secrets.KEY_SHEET_JSON }}' > key_sheet.json
+
+      - name: Execute SYNC_HEAVY_PROM_UA
+        env:
+          IMPORT_PROM_UA_SPREADSHEET_ID: ${{ secrets.IMPORT_PROM_UA_SPREADSHEET_ID }}
+          IMPORT_PROM_UA_HEAVY_SPREADSHEET_ID: ${{ secrets.IMPORT_PROM_UA_HEAVY_SPREADSHEET_ID }}
+        run: python SYNC_HEAVY_PROM_UA.py

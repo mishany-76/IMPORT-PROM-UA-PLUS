@@ -1,0 +1,92 @@
+name: Scheduled Script Runner
+
+on:
+  schedule:
+    - cron: '49 5,9,16 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout repository content
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Recreate secret files
+        run: |
+          echo "${{ secrets.USER_EMAIL }}" > user.txt
+          echo '${{ secrets.KEY_SHEET_JSON }}' > key_sheet.json
+
+      - name: Execute main script
+        env:
+          # System & Notifications
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          USER_EMAIL: ${{ secrets.USER_EMAIL }}
+          GOOGLE_APPS_SCRIPT_URL: ${{ secrets.GOOGLE_APPS_SCRIPT_URL }}
+          SUBSCRIBERS_SERVICES_SPREADSHEET_ID: ${{ secrets.SUBSCRIBERS_SERVICES_SPREADSHEET_ID }}
+          SUBSCRIBERS_SERVICES_URL: ${{ secrets.SUBSCRIBERS_SERVICES_URL }}
+          
+          # Supplier Feeds & Parsing Sheets (PLUS Secrets)
+          AGER_FEED_PLUS_URL: ${{ secrets.AGER_FEED_PLUS_URL }}
+          AGER_PLUS_USER_AGENT: ${{ secrets.AGER_PLUS_USER_AGENT }}
+          BAGSROOM_PLUS_FEED_URL: ${{ secrets.BAGSROOM_PLUS_FEED_URL }}
+          BAYRAKTAR_PLUS_FEED_URL: ${{ secrets.BAYRAKTAR_PLUS_FEED_URL }}
+          FOOTBALLERS_PLUS_FEED_SPREADSHEET_ID: ${{ secrets.FOOTBALLERS_PLUS_FEED_SPREADSHEET_ID }}
+          FOOTBALLERS_PLUS_FEED_URL: ${{ secrets.FOOTBALLERS_PLUS_FEED_URL }}
+          IZIDROP_PLUS_FEED_URL: ${{ secrets.IZIDROP_PLUS_FEED_URL }}
+          KIRS_PLUS_FEED_URL: ${{ secrets.KIRS_PLUS_FEED_URL }}
+          MOYDROP_PLUS_FEED_URL: ${{ secrets.MOYDROP_PLUS_FEED_URL }}
+          
+          PARS_AGER_PLUS_SPREADSHEET_ID: ${{ secrets.PARS_AGER_PLUS_SPREADSHEET_ID }}
+          PARS_BAGSROOM_PLUS_SPREADSHEET_ID: ${{ secrets.PARS_BAGSROOM_PLUS_SPREADSHEET_ID }}
+          PARS_BAYRAKTAR_PLUS_SPREADSHEET_ID: ${{ secrets.PARS_BAYRAKTAR_PLUS_SPREADSHEET_ID }}
+          PARS_FOOTBALLERS_PLUS_SPREADSHEET_ID: ${{ secrets.PARS_FOOTBALLERS_PLUS_SPREADSHEET_ID }}
+          PARS_IZIDROP_PLUS_SPREADSHEET_ID: ${{ secrets.PARS_IZIDROP_PLUS_SPREADSHEET_ID }}
+          PARS_KIRS_PLUS_SPREADSHEET_ID: ${{ secrets.PARS_KIRS_PLUS_SPREADSHEET_ID }}
+          PARS_MOYDROP_PLUS_SPREADSHEET_ID: ${{ secrets.PARS_MOYDROP_PLUS_SPREADSHEET_ID }}
+          
+          # Aliases for backwards compatibility
+          AGER_FEED_URL: ${{ secrets.AGER_FEED_PLUS_URL }}
+          AGER_USER_AGENT: ${{ secrets.AGER_PLUS_USER_AGENT }}
+          BAGSROOM_FEED_URL: ${{ secrets.BAGSROOM_PLUS_FEED_URL }}
+          BAYRAKTAR_FEED_URL: ${{ secrets.BAYRAKTAR_PLUS_FEED_URL }}
+          FOOTBALLERS_FEED_SPREADSHEET_ID: ${{ secrets.FOOTBALLERS_PLUS_FEED_SPREADSHEET_ID }}
+          IZIDROP_FEED_URL: ${{ secrets.IZIDROP_PLUS_FEED_URL }}
+          KIRS_FEED_URL: ${{ secrets.KIRS_PLUS_FEED_URL }}
+          MOYDROP_FEED_URL: ${{ secrets.MOYDROP_PLUS_FEED_URL }}
+          PARS_AGER_SPREADSHEET_ID: ${{ secrets.PARS_AGER_PLUS_SPREADSHEET_ID }}
+          PARS_BAGSROOM_SPREADSHEET_ID: ${{ secrets.PARS_BAGSROOM_PLUS_SPREADSHEET_ID }}
+          PARS_BAYRAKTAR_SPREADSHEET_ID: ${{ secrets.PARS_BAYRAKTAR_PLUS_SPREADSHEET_ID }}
+          PARS_FOOTBALLERS_SPREADSHEET_ID: ${{ secrets.PARS_FOOTBALLERS_PLUS_SPREADSHEET_ID }}
+          PARS_IZIDROP_SPREADSHEET_ID: ${{ secrets.PARS_IZIDROP_PLUS_SPREADSHEET_ID }}
+          PARS_KIRS_SPREADSHEET_ID: ${{ secrets.PARS_KIRS_PLUS_SPREADSHEET_ID }}
+          PARS_MOYDROP_SPREADSHEET_ID: ${{ secrets.PARS_MOYDROP_PLUS_SPREADSHEET_ID }}
+          
+          # Target Two-Echelon Pipeline Sheets
+          IMPORT_TEMPLATE_PROM_SPREADSHEET_ID: ${{ secrets.IMPORT_TEMPLATE_PROM_SPREADSHEET_ID }}
+          IMPORT_PROM_UA_SPREADSHEET_ID: ${{ secrets.IMPORT_PROM_UA_SPREADSHEET_ID }}
+          IMPORT_PROM_UA_HEAVY_SPREADSHEET_ID: ${{ secrets.IMPORT_PROM_UA_HEAVY_SPREADSHEET_ID }}
+          
+          # Cloudflare R2 & Prom.ua API
+          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
+          PROM_TOKEN_Vaillant: ${{ secrets.PROM_TOKEN_VAILLANT }}
+          
+        run: python main.py
