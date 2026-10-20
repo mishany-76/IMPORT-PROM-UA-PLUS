@@ -137,13 +137,21 @@ class FeedProcessor:
                 # Convert 'available' to lowercase boolean string
                 product_data['available'] = str(product_data.get('available', 'false')).lower()
 
-                # Ensure 'price' is a number if it exists
-                if 'price' in product_data:
+                                # Ensure 'price' is a valid number strictly > 0
+                if 'price' in product_data and product_data['price'] is not None and str(product_data['price']).strip():
                     try:
-                        product_data['price'] = str(float(product_data['price']))
+                        clean_p_str = str(product_data['price']).strip().replace(',', '.')
+                        price_val = float(clean_p_str)
+                        if price_val <= 0:
+                            logger.warning(f"Пропуск товара {product_id} ({product_data.get('vendorCode', '')}): цена <= 0 ({product_data.get('price')})")
+                            continue
+                        product_data['price'] = str(price_val)
                     except (ValueError, TypeError):
-                        logger.warning(f"Invalid price format for product {product_id}: {product_data.get('price')}")
-                        product_data['price'] = '0'
+                        logger.warning(f"Пропуск товара {product_id} ({product_data.get('vendorCode', '')}): неверный формат цены ({product_data.get('price')})")
+                        continue
+                else:
+                    logger.warning(f"Пропуск товара {product_id} ({product_data.get('vendorCode', '')}): цена отсутствует или пуста")
+                    continue
 
                 # Ensure 'oldprice' is a number if it exists
                 if 'oldprice' in product_data:

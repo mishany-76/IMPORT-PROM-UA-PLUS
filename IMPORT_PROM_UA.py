@@ -1060,9 +1060,15 @@ def apply_price_discount(sheets_service, source_spreadsheet, target_spreadsheet,
             src_price = src_row[src_price_idx].strip() if src_price_idx < len(src_row) else ''
             src_price_from = src_row[src_price_from_idx].strip() if src_price_from_idx < len(src_row) else ''
 
-            # --- ИЗМЕНЕНИЕ 1: Отмена скидки ---
+            # --- ИЗМЕНЕНИЕ 1: Отмена скидки и проверка на > 0 ---
             if not src_price:
                 continue  # Если базовой цены нет вообще, пропускаем
+
+            try:
+                if parse_price(src_price) <= 0:
+                    continue  # Если цена 0 или отрицательная, пропускаем
+            except (ValueError, TypeError):
+                continue
 
             def parse_price(val):
                 val = re.sub(r'\s+', '', val)

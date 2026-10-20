@@ -1281,6 +1281,20 @@ def process_supplier(gsheets, spreadsheet_id, supplier_name, mapping):
         if products_df is not None:
             results["products"] = transform_supplier_data(
                 products_df, supplier_name, "products", mapping)
+
+            # --- ЗАЩИТА: Фильтрация товаров с нулевой, пустой или некорректной ценой ---
+            if 'Ціна' in results["products"].columns and not results["products"].empty:
+                orig_len = len(results["products"])
+                price_num = pd.to_numeric(
+                    results["products"]['Ціна'].astype(str).str.replace(r'\s+', '', regex=True).str.replace(',', '.'),
+                    errors='coerce'
+                ).fillna(0)
+                results["products"] = results["products"][price_num > 0].copy()
+                filtered_count = orig_len - len(results["products"])
+                if filtered_count > 0:
+                    logger.warning(
+                        f"Поставщик {supplier_name}: отфильтровано {filtered_count} товаров с ценой <= 0 или пустой ценой (не допущены в шаблон импорта)"
+                    )
         else:
             logger.warning(f"Нет данных товаров для {supplier_name}")
             results["products"] = pd.DataFrame()
@@ -1544,7 +1558,16 @@ def main():
 
         products_cols, groups_cols = get_template_columns()
 
-        merged_products = pd.concat(all_products, ignore_index=True) if all_products \
+        merged_products = pd.concat(all_products, ignore_index=True)
+        if 'Ціна' in merged_products.columns and not merged_products.empty:
+            orig_total = len(merged_products)
+            price_num_final = pd.to_numeric(
+                merged_products['Ціна'].astype(str).str.replace(r'\s+', '', regex=True).str.replace(',', '.'),
+                errors='coerce'
+            ).fillna(0)
+            merged_products = merged_products[price_num_final > 0].copy()
+            if orig_total > len(merged_products):
+                logger.warning(f"Итоговая таблица: удалено {orig_total - len(merged_products)} позиций с некорректной/нулевой ценой!") if all_products \
             else pd.DataFrame(columns=products_cols)
         merged_groups = pd.concat(all_groups, ignore_index=True) if all_groups \
             else pd.DataFrame(columns=groups_cols)
