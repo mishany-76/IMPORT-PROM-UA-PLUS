@@ -90,27 +90,31 @@ def send_telegram_message(text):
         logging.error(f"Ошибка отправки в Telegram: {e}")
 
 
+def clean_email(email_str):
+    """Очистка email от пробелов, кавычек, невидимых символов и приведение к нижнему регистру"""
+    if not email_str:
+        return ""
+    return str(email_str).strip().strip("'\"").replace('\xa0', '').strip().lower()
+
+
 def check_user_file():
-    """Проверяет наличие и содержимое файла user.txt"""
-    # Если мы в GitHub Actions, можем передать email через переменную окружения
+    """Проверка наличия и содержимого email пользователя"""
     env_email = os.environ.get("USER_EMAIL")
     if env_email:
-        return env_email
+        return clean_email(env_email)
 
     if not os.path.exists("user.txt"):
         logging.error("Файл user.txt не найден")
-        print("\nФайл user.txt не найден! Создайте файл и заполните Ваш Email")
-        print("Программа закроется автоматически через 5 секунд...")
+        print("\nФайл user.txt не найден! Пожалуйста, создайте его и добавьте ваш Email")
         time.sleep(5)
         exit()
 
-    with open("user.txt", "r") as f:
-        user_email = f.read().strip()
+    with open("user.txt", "r", encoding="utf-8") as f:
+        user_email = clean_email(f.read())
 
     if not user_email:
         logging.error("Файл user.txt пуст")
-        print("\nФайл user.txt пуст. Добавьте Ваш Email в файл и перезапустите программу")
-        print("Программа закроется автоматически через 5 секунд...")
+        print("\nФайл user.txt пуст. Пожалуйста, добавьте ваш Email в файл и перезапустите скрипт")
         time.sleep(5)
         exit()
 
@@ -118,65 +122,76 @@ def check_user_file():
 
 
 def safe_api_request(url, retries=MAX_RETRIES):
-    """Безопасный запрос к API с обработкой квот и повторными попытками"""
+    """Безопасный запрос к API с повторными попытками при ошибках"""
     for attempt in range(retries):
         try:
-            time.sleep(API_DELAY)  # Задержка перед каждым запросом
+            time.sleep(API_DELAY)
             response = requests.get(url, timeout=30)
             response.raise_for_status()
             return response
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429:
-                wait_time = (2 ** attempt) * 5  # Экспоненциальная задержка
-                logging.warning(f"Превышена квота API. Попытка {attempt + 1}/{retries}. Ожидание {wait_time} сек...")
+                wait_time = (2 ** attempt) * 5
+                logging.warning(f"Превышен лимит запросов к API. Попытка {attempt + 1}/{retries}. Ждем {wait_time} секунд...")
                 time.sleep(wait_time)
                 continue
-            logging.error(f"HTTP ошибка при запросе к {url}: {e}")
+            logging.error(f"HTTP ошибка при обращении к {url}: {e}")
             raise
         except requests.RequestException as e:
-            logging.error(f"Ошибка подключения к {url}: {e}")
+            logging.error(f"Сетевая ошибка при обращении к {url}: {e}")
             raise
     logging.error(f"Не удалось выполнить запрос к {url} после {retries} попыток")
-    raise Exception(f"Не удалось выполнить запрос после {retries} попыток")
+    raise Exception(f"Не удалось получить данные после {retries} попыток")
 
 
 def check_subscription():
-    """Проверка подписки в указанном столбце Google таблицы"""
-    logging.info("Начало проверки подписки...")
+    """Проверка подписки пользователя в Google Таблице"""
+    if os.environ.get("SKIP_SUBSCRIPTION_CHECK", "").lower() in ("true", "1", "yes"):
+        logging.info("SKIP_SUBSCRIPTION_CHECK включен, проверка подписки пропущена.")
+        return True
+
+    logging.info("Начинаем проверку подписки...")
     user_email = check_user_file()
-    logging.info(f"Email для проверки: {user_email}")
+    logging.info(f"Email пользователя для проверки (длина {len(user_email)}): '{user_email}'")
 
     try:
-        # ПРОВЕРКА АВТОРИЗАЦИИ: если есть сервисный аккаунт (GitHub Actions или локально с файлом)
+        # Вариант 1: Через сервисный аккаунт (GitHub Actions и локальный запуск с ключом)
         if os.path.exists("key_sheet.json"):
-            logging.info("Найден файл key_sheet.json. Авторизация через сервисный аккаунт...")
+            logging.info("Используем key_sheet.json. Подключаемся через сервисный аккаунт...")
             gc = gspread.service_account(filename="key_sheet.json")
             sh = gc.open_by_key(SPREADSHEET_KEY)
-            worksheet = sh.worksheet("Users") # лист "Users", как было в старой ссылке
-            
-            # Получаем все данные из листа и преобразуем в DataFrame (сохраняем оригинальную логику обработки)
+            worksheet = sh.worksheet("Users") # лист "Users", где хранятся подписчики
+
             records = worksheet.get_all_records()
             df = pd.DataFrame(records)
-        
-        # РЕЗЕРВНЫЙ ВАРИАНТ: если файла нет (например, локальный запуск без ключа)
+
+        # Вариант 2: Через публичный CSV (если ключ недоступен)
         else:
-            logging.info("Файл key_sheet.json не найден. Используется резервное чтение по ссылке...")
+            logging.info("Файл key_sheet.json не найден. Пробуем получить данные через публичный CSV...")
             response = safe_api_request(SUBSCRIBERS_SERVICES_URL)
             csv_data = StringIO(response.text)
             df = pd.read_csv(csv_data)
 
         if TARGET_COLUMN not in df.columns:
-            logging.error(f"Столбец {TARGET_COLUMN} не найден в таблице")
+            logging.error(f"Столбец '{TARGET_COLUMN}' не найден в таблице Users. Доступные столбцы: {list(df.columns)}")
             return False
 
-        emails = df[TARGET_COLUMN].astype(str).str.strip().tolist()
-        logging.info(f"Найдено {len(emails)} emails в столбце {TARGET_COLUMN}")
+        raw_emails = df[TARGET_COLUMN].dropna().tolist()
+        emails = [clean_email(e) for e in raw_emails if clean_email(e)]
+        logging.info(f"Получено {len(emails)} emails из листа '{TARGET_COLUMN}': {emails}")
 
-        return user_email in emails
+        is_valid = user_email in emails
+        if not is_valid:
+            logging.error(f"Email '{user_email}' не найден среди разрешенных в таблице: {emails}")
+        else:
+            logging.info(f"Email '{user_email}' успешно авторизован!")
+
+        return is_valid
 
     except Exception as e:
         logging.error(f"Ошибка при проверке подписки: {e}")
         return False
+
 
 
 def check_and_clear_log():
