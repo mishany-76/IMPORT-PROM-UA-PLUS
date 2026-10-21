@@ -172,6 +172,15 @@ class GoogleSheetsManager:
                 logger.info(f"Пустой DataFrame, нет данных для записи в {sheet_name}")
                 return True, None
 
+            is_groups = "Export Groups Sheet" in sheet_name
+
+            def _col_letter(idx):
+                letter, n = '', idx + 1
+                while n > 0:
+                    n, rem = divmod(n - 1, 26)
+                    letter = chr(65 + rem) + letter
+                return letter
+
             # ── Шаг 1: читаем только строку заголовков (строка 1) ──────────────
             self._wait_if_needed()
             hdr_result = self._execute_with_retry(
@@ -210,7 +219,6 @@ class GoogleSheetsManager:
                 )
 
             # ── Шаг 2: определяем ключевые столбцы ────────────────────────────
-            is_groups = "Export Groups Sheet" in sheet_name
             if is_groups:
                 id_column = next((c for c in ["Ідентифікатор_групи", "Номер_групи"]
                                   if c in df.columns), df.columns[0])
@@ -222,13 +230,6 @@ class GoogleSheetsManager:
 
             id_col_idx = headers.index(id_column) if id_column in headers else 0
             name_col_idx = headers.index(name_column) if name_column in headers else -1
-
-            def _col_letter(idx):
-                letter, n = '', idx + 1
-                while n > 0:
-                    n, rem = divmod(n - 1, 26)
-                    letter = chr(65 + rem) + letter
-                return letter
 
             # ── Шаг 3: читаем ключевой столбец (+ name_column для групп) ──────
             #    Это ОДИН узкий запрос вместо чтения всего листа целиком.
