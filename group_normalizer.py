@@ -387,3 +387,4 @@ def resolve_product_group(supplier_name: str, raw_cat_id: str, product_title: st
     else:
         gid = "30102"
     return gid, CANONICAL_GROUPS_BY_ID[gid]["name"]
+

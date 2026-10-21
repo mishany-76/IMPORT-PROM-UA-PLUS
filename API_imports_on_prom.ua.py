@@ -102,7 +102,14 @@ def upload_to_r2(data):
 
 def trigger_prom_import():
     """Запуск импорта контента в VaillantVibe по строго утвержденному стандарту Эшелона 2"""
-    print("5. Запуск импорта через Prom API...")
+    # ⚠️ БОЕВОЕ ТЕСТИРОВАНИЕ: Отправка ссылки с архивом в Prom API ОТКЛЮЧЕНА!
+    print("5. [РЕЖИМ БОЕВОГО ТЕСТИРОВАНИЯ] Отправка ссылки с архивом в Prom API ОТКЛЮЧЕНА.")
+    print("   Архив успешно создан, сжат и выгружен на Cloudflare R2.")
+    print(f"   Публичный URL архива на Cloudflare R2: {PUBLIC_URL}")
+    print("   В реальный магазин Prom.ua ничего НЕ отправляется. Проверка таблиц безопасна.")
+    return
+
+def _disabled_trigger_prom_import():
     import_url = "https://my.prom.ua/api/v1/products/import_url"
 
     # ЖЕСТКИЙ СТАНДАРТ ЭШЕЛОНА 2 ИЗ ВТОРОГО МОЗГА:
