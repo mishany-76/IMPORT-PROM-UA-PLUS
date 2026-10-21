@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 import os  # <--- ВОТ ЭТА СТРОКА ОБЯЗАТЕЛЬНА
 import re  # ДОБАВЛЕНО: нужно для обработки строк с ценами
+from group_normalizer import resolve_product_group, get_canonical_groups_df
 
 # Настройка логирования
 logging.basicConfig(
@@ -1713,6 +1714,17 @@ def transform_supplier_data(supplier_df, supplier_name, sheet_type, mapping):
             if portal_cat_id:
                 row_data['Ідентифікатор_підрозділу'] = portal_cat_id
 
+            # Нормализация внутренней группы магазина и логистики (Номер_групи, Назва_групи)
+            norm_group_id, norm_group_name = resolve_product_group(
+                supplier_name=supplier_name,
+                raw_cat_id=raw_cat_id,
+                product_title=product_title
+            )
+            if norm_group_id:
+                row_data['Номер_групи'] = norm_group_id
+                row_data['Назва_групи'] = norm_group_name
+                row_data['Ідентифікатор_групи'] = norm_group_id
+
         # Значения по умолчанию для продуктов
         if sheet_type == "products":
             if not row_data['Валюта']:
@@ -2107,8 +2119,8 @@ def main():
             if orig_total > len(merged_products):
                 logger.warning(f"Итоговая таблица: удалено {orig_total - len(merged_products)} позиций с некорректной/нулевой ценой!") if all_products \
             else pd.DataFrame(columns=products_cols)
-        merged_groups = pd.concat(all_groups, ignore_index=True) if all_groups \
-            else pd.DataFrame(columns=groups_cols)
+        # Эталонное 3-уровневое дерево групп Prom.ua (62 группы: 5 корневых, 23 подраздела, 34 конечные с логистикой)
+        merged_groups = get_canonical_groups_df()
 
         logger.info(f"Объединено продуктов: {len(merged_products)}")
         logger.info(f"Объединено групп: {len(merged_groups)}")
