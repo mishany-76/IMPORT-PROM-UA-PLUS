@@ -582,6 +582,9 @@ def synchronize_single_sheet_with_data(gspread_client, sheets_service, source_sh
         for source_row_index, source_row in enumerate(source_data):
             source_row_1based = source_row_index + 2
 
+            if len(source_row) < source_num_cols:
+                source_row = list(source_row) + [''] * (source_num_cols - len(source_row))
+
             if len(source_row) <= max_key_idx_source:
                 continue
 

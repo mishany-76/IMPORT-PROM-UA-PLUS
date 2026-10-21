@@ -194,6 +194,21 @@ class GoogleSheetsManager:
 
             headers = header_values[0]
 
+            # Гарантируем наличие критических колонок в заголовке таблицы
+            if not is_groups and "Ідентифікатор_підрозділу" not in headers:
+                logger.warning(f"'Ідентифікатор_підрозділу' отсутствует в заголовках {sheet_name}. Добавляем в заголовок...")
+                headers.append("Ідентифікатор_підрозділу")
+                col_letter = _col_letter(len(headers) - 1)
+                self._wait_if_needed()
+                self._execute_with_retry(
+                    self.service.spreadsheets().values().update(
+                        spreadsheetId=spreadsheet_id,
+                        range=f"{sheet_name}!{col_letter}1",
+                        valueInputOption='USER_ENTERED',
+                        body={'values': [["Ідентифікатор_підрозділу"]]}
+                    )
+                )
+
             # ── Шаг 2: определяем ключевые столбцы ────────────────────────────
             is_groups = "Export Groups Sheet" in sheet_name
             if is_groups:
@@ -246,7 +261,10 @@ class GoogleSheetsManager:
             # ── Шаг 4: определяем критические индексы ─────────────────────────
             col_idx_to_df_col = {}
             if is_groups:
-                critical_fields = ["Назва_групи", "Назва_групи_укр", "Ідентифікатор_групи"]
+                critical_fields = [
+                    "Назва_групи", "Назва_групи_укр", "Ідентифікатор_групи",
+                    "Номер_батьківської_групи", "Ідентифікатор_батьківської_групи"
+                ]
                 for f in critical_fields:
                     if f in headers and f in df.columns:
                         idx = headers.index(f)
@@ -256,7 +274,18 @@ class GoogleSheetsManager:
                     "Назва_позиції", "Назва_позиції_укр", "Опис", "Опис_укр",
                     "Наявність", "Ціна", "Ціна_від", "Кількість", "Знижка",
                     "Ярлик", "Де_знаходиться_товар", "Тип_товару",
+                    "Ідентифікатор_підрозділу", "Номер_групи", "Назва_групи", "Ідентифікатор_групи",
+                    "Виробник", "Країна_виробник", "Посилання_зображення"
                 ]
+                # Добавляем все слоты характеристик (1..24) для полной синхронизации
+                for i in range(1, 25):
+                    suffix = f"_{i}" if i > 1 else ""
+                    base_critical_fields.extend([
+                        f"Назва_Характеристики{suffix}",
+                        f"Одиниця_виміру_Характеристики{suffix}",
+                        f"Значення_Характеристики{suffix}"
+                    ])
+
                 for f in base_critical_fields:
                     if f in headers and f in df.columns:
                         idx = headers.index(f)
@@ -366,8 +395,9 @@ class GoogleSheetsManager:
             # ── Шаг 8: отправляем обновления батчами ─────────────────────────
             if batch_value_updates:
                 logger.info(f"Отправляем {len(batch_value_updates)} обновлений ячеек в {sheet_name}")
-                for chunk_start in range(0, len(batch_value_updates), CONFIG["BATCH_SIZE"]):
-                    chunk = batch_value_updates[chunk_start:chunk_start + CONFIG["BATCH_SIZE"]]
+                BATCH_UPDATE_CHUNK = 5000
+                for chunk_start in range(0, len(batch_value_updates), BATCH_UPDATE_CHUNK):
+                    chunk = batch_value_updates[chunk_start:chunk_start + BATCH_UPDATE_CHUNK]
                     self._execute_with_retry(
                         self.service.spreadsheets().values().batchUpdate(
                             spreadsheetId=spreadsheet_id,
@@ -1465,10 +1495,12 @@ def resolve_portal_category(supp_cat_id: str, title: str, supplier_name: str) ->
 
     # Специфические эвристики для KIRS (галантерея, сумки, игрушки)
     if supplier_name == "KIRS":
-        if any(w in title_lower for w in ["дитяч", "детск"]):
-            return "380501"  # дитячі сумки і рюкзаки
         if any(w in title_lower for w in ["брелок", "брелоч"]):
             return "170702"  # брелоки
+        if any(w in title_lower for w in ["іграшк", "игрушк", "плюшев"]):
+            return "2604"    # м'які іграшки
+        if any(w in title_lower for w in ["дитяч", "детск"]):
+            return "380501"  # дитячі сумки і рюкзаки
         if any(w in title_lower for w in ["гаманець", "кошелек", "портмоне", "зажим", "клатч"]):
             return "152405"  # гаманці та портмоне
         if any(w in title_lower for w in ["бананка", "на пояс", "крос-боді", "кросс-боди"]):
@@ -1479,6 +1511,48 @@ def resolve_portal_category(supp_cat_id: str, title: str, supplier_name: str) ->
             return "32801"   # ремені та пояси
         if any(w in title_lower for w in ["сумка", "барсетка", "мессенджер", "портфель"]):
             return "152411"  # чоловічі сумки
+
+    # Специфические эвристики для BAGSROOM (сумки, рюкзаки, чемоданы)
+    if supplier_name == "BAGSROOM":
+        if any(w in title_lower for w in ["рюкзак"]):
+            return "380601"
+        if any(w in title_lower for w in ["гаманець", "кошелек", "портмоне"]):
+            return "152405"
+        if any(w in title_lower for w in ["бананка", "на пояс"]):
+            return "380650"
+        if any(w in title_lower for w in ["чемодан", "валіз"]):
+            return "3803"
+        return "152411"
+
+    # Специфические эвристики для BAYRAKTAR (тактическая обувь и амуниция)
+    if supplier_name == "BAYRAKTAR":
+        if any(w in title_lower for w in ["берці", "берцы"]):
+            return "690102"
+        if any(w in title_lower for w in ["кросівки", "кроссовки"]):
+            return "3220713"
+        if any(w in title_lower for w in ["ботинк", "черевик"]):
+            return "3220413"
+        if any(w in title_lower for w in ["рюкзак"]):
+            return "380601"
+        return "690102"
+
+    # Специфические эвристики для FOOTBALLERS (футбольные товары)
+    if supplier_name == "FOOTBALLERS":
+        if any(w in title_lower for w in ["м'яч", "мяч"]):
+            return "2023"
+        if any(w in title_lower for w in ["бутси", "бутсы", "сороконожк", "сороконіжк", "футзал"]):
+            return "3220707"
+        if any(w in title_lower for w in ["кросівки", "кроссовки", "кеди", "кеды"]):
+            return "3220713"
+        if any(w in title_lower for w in ["щитки", "щиток"]):
+            return "2031"
+        if any(w in title_lower for w in ["рукавиці", "рукавички", "перчатки"]):
+            return "2025"
+        if any(w in title_lower for w in ["форма", "футболка"]):
+            return "2022"
+        if any(w in title_lower for w in ["гетри", "гетры"]):
+            return "2026"
+        return "2023"
 
     # Общие эвристики по ключевым словам
     if any(w in title_lower for w in ["кросівки", "кроссовки", "кеди", "кеды"]):
@@ -1534,14 +1608,6 @@ def transform_supplier_data(supplier_df, supplier_name, sheet_type, mapping):
             row_data['Ідентифікатор_товару'] = row_dict.get('id', '')
             row_data['Код_товару'] = row_dict.get('vendorCode', '')
         # Для FOOTBALLERS идентификаторы маппятся через основной цикл (column_mapping.json)
-
-        # Определение точной портальной категории Prom.ua (Ідентифікатор_підрозділу)
-        if sheet_type == "products":
-            raw_cat_id = str(row_dict.get('categoryId', '') or row_dict.get('group_id', '') or row_dict.get('Ідентифікатор_підрозділу', '') or '').strip()
-            product_title = str(row_dict.get('name', '') or row_dict.get('name_ua', '') or row_dict.get('Назва_позиції', '') or row_dict.get('Назва_позиції_укр', '') or '')
-            portal_cat_id = resolve_portal_category(raw_cat_id, product_title, supplier_name)
-            if portal_cat_id:
-                row_data['Ідентифікатор_підрозділу'] = portal_cat_id
 
         # Основной цикл маппинга на основе column_mapping.json
         for supplier_col, target_col in supplier_mapping.items():
@@ -1622,6 +1688,29 @@ def transform_supplier_data(supplier_df, supplier_name, sheet_type, mapping):
                         break
                 else:
                     break
+
+        # Определение точной портальной категории Prom.ua (Ідентифікатор_підрозділу)
+        # Выполняется ПОСЛЕ основного маппинга, чтобы использовать уже нормализованные названия и группы
+        if sheet_type == "products":
+            raw_cat_id = str(
+                row_dict.get('categoryId', '')
+                or row_dict.get('group_id', '')
+                or row_dict.get('Номер_групи', '')
+                or row_data.get('Номер_групи', '')
+                or row_data.get('Ідентифікатор_групи', '')
+                or row_dict.get('Ідентифікатор_підрозділу', '')
+                or ''
+            ).strip()
+            product_title = str(
+                row_data.get('Назва_позиції_укр', '')
+                or row_data.get('Назва_позиції', '')
+                or row_dict.get('name_ua', '')
+                or row_dict.get('name', '')
+                or ''
+            ).strip()
+            portal_cat_id = resolve_portal_category(raw_cat_id, product_title, supplier_name)
+            if portal_cat_id:
+                row_data['Ідентифікатор_підрозділу'] = portal_cat_id
 
         # Значения по умолчанию для продуктов
         if sheet_type == "products":
