@@ -1522,7 +1522,7 @@ def resolve_portal_category(supp_cat_id: str, title: str, supplier_name: str) ->
         if any(w in title_lower for w in ["бананка", "на пояс"]):
             return "380650"
         if any(w in title_lower for w in ["чемодан", "валіз"]):
-            return "3803"
+            return "152404"  # дорожні сумки та валізи
         return "152411"
 
     # Специфические эвристики для BAYRAKTAR (тактическая обувь и амуниция)
@@ -1540,19 +1540,19 @@ def resolve_portal_category(supp_cat_id: str, title: str, supplier_name: str) ->
     # Специфические эвристики для FOOTBALLERS (футбольные товары)
     if supplier_name == "FOOTBALLERS":
         if any(w in title_lower for w in ["м'яч", "мяч"]):
-            return "2023"
+            return "2023"     # футбольні м'ячі
         if any(w in title_lower for w in ["бутси", "бутсы", "сороконожк", "сороконіжк", "футзал"]):
-            return "3220707"
+            return "3220707"  # футбольне взуття
         if any(w in title_lower for w in ["кросівки", "кроссовки", "кеди", "кеды"]):
-            return "3220713"
+            return "3220713"  # кросівки та кеди
         if any(w in title_lower for w in ["щитки", "щиток"]):
-            return "2031"
+            return "203302"   # футбольні щитки
         if any(w in title_lower for w in ["рукавиці", "рукавички", "перчатки"]):
-            return "2025"
+            return "203108"   # футбольні рукавички
         if any(w in title_lower for w in ["форма", "футболка"]):
-            return "2022"
+            return "30124"    # спортивна форма
         if any(w in title_lower for w in ["гетри", "гетры"]):
-            return "2026"
+            return "203303"   # футбольні гетри
         return "2023"
 
     # Общие эвристики по ключевым словам
