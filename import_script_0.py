@@ -1300,6 +1300,223 @@ def normalize_characteristic_value(char_name: str, value: str) -> str:
     return val_clean
 
 
+def repair_and_format_size_table(html_content: str, is_ukr: bool = False) -> str:
+    """
+    Форматирует HTML-таблицы замеров для аккуратного отображения на Prom.ua
+    (границы ячеек, отступы, центрирование).
+    Также устраняет системную ошибку поставщика AGER для тапочек/обуви со сдвоенными размерами
+    (когда спаренные размеры 36-37 ошибочно разбивались на 36 в размер и 37 в стельку).
+    """
+    if not html_content or '<table' not in html_content:
+        return html_content
+
+    def fix_table_match(match):
+        table_html = match.group(0)
+
+        header_title = "Заміри (фактичні заміри можуть відрізнятися +- 2 см)" if is_ukr else "Замеры (фактические замеры могут отличаться +- 2 см)"
+        m_head = re.search(r"""<td[^>]*class=["']?thead_td["']?[^>]*>(.*?)</td>""", table_html, re.DOTALL | re.IGNORECASE)
+        if m_head:
+            header_title = re.sub(r'<[^>]+>', '', m_head.group(1)).strip()
+
+        rows = re.findall(r"""<tr[^>]*class=["']?tbody_tr["']?[^>]*>(.*?)</tr>""", table_html, re.DOTALL | re.IGNORECASE)
+        if not rows:
+            rows = re.findall(r'<tr[^>]*>(.*?)</tr>', table_html, re.DOTALL | re.IGNORECASE)
+            if rows and header_title in rows[0]:
+                rows = rows[1:]
+
+        parsed_rows = []
+        for r in rows:
+            first_m = re.search(r"""<td[^>]*class=["']?tbody_first-td["']?[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
+            if first_m:
+                row_label = re.sub(r'<[^>]+>', '', first_m.group(1)).strip()
+            else:
+                cells = re.findall(r'<td[^>]*>(.*?)</td>', r, re.DOTALL | re.IGNORECASE)
+                row_label = re.sub(r'<[^>]+>', '', cells[0]).strip() if cells else ''
+
+            tds = re.findall(r"""<td[^>]*class=["']?tbody_td["']?[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
+            if not tds:
+                all_cells = re.findall(r'<td[^>]*>(.*?)</td>', r, re.DOTALL | re.IGNORECASE)
+                tds = [re.sub(r'<[^>]+>', '', c).strip() for c in all_cells[1:]]
+            else:
+                tds = [re.sub(r'<[^>]+>', '', c).strip() for c in tds]
+
+            if row_label or tds:
+                parsed_rows.append((row_label, tds))
+
+        # Проверка и исправление бага сдвоенных размеров AGER
+        # Строка 1: Размер [36, 38, 40] и Строка 2: Длина по стельке [37, 39, 41]
+        if len(parsed_rows) == 2:
+            r1_label, r1_vals = parsed_rows[0]
+            r2_label, r2_vals = parsed_rows[1]
+            if len(r1_vals) == len(r2_vals) and len(r1_vals) > 0:
+                try:
+                    n1 = [int(v.replace(',', '.').split()[0]) for v in r1_vals]
+                    n2 = [int(v.replace(',', '.').split()[0]) for v in r2_vals]
+                    diffs = [b - a for a, b in zip(n1, n2)]
+                    if all(d == 1 for d in diffs):
+                        paired_sizes = [f"{a}-{b}" for a, b in zip(n1, n2)]
+                        label = "Розмір" if is_ukr else "Размер"
+                        parsed_rows = [(label, paired_sizes)]
+                except (ValueError, IndexError):
+                    pass
+
+        if not parsed_rows:
+            return table_html
+
+        col_count = max(len(r[1]) for r in parsed_rows) + 1
+
+        res = [
+            f'<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%; border: 1px solid #dcdcdc; text-align: center; margin: 12px 0;">',
+            f'  <thead>',
+            f'    <tr style="background-color: #f7f7f7; font-weight: bold;">',
+            f'      <th colspan="{col_count}" style="padding: 8px 12px; border: 1px solid #dcdcdc; text-align: center; font-size: 13px;">{header_title}</th>',
+            f'    </tr>',
+            f'  </thead>',
+            f'  <tbody>'
+        ]
+
+        for r_label, r_vals in parsed_rows:
+            res.append('    <tr>')
+            res.append(f'      <td style="padding: 7px 10px; border: 1px solid #dcdcdc; background-color: #fafafa; font-weight: 600; text-align: left; font-size: 13px;">{r_label}</td>')
+            for val in r_vals:
+                res.append(f'      <td style="padding: 7px 10px; border: 1px solid #dcdcdc; text-align: center; font-size: 13px;">{val}</td>')
+            res.append('    </tr>')
+
+        res.append('  </tbody>')
+        res.append('</table>')
+
+        return '\n'.join(res)
+
+    cleaned = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<table[^>]*>.*?</table>', fix_table_match, cleaned, flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.strip()
+
+
+def sanitize_description(text: str, is_ukr: bool = False) -> str:
+    """
+    Санитизирует описание товаров под требования модерации Prom.ua:
+    1. Удаляет опасные теги (<script>, <style>, <iframe>, <object>, <embed>).
+    2. Удаляет внешние ссылки (http, https, ссылки на поставщиков, телеграм, инстаграм).
+    3. Раскрывает теги <a> в чистый текст.
+    4. Удаляет контактные номера телефонов.
+    5. Форматирует и нормализует таблицы замеров.
+    """
+    if not text or pd.isna(text):
+        return ""
+    text = str(text)
+
+    # 1. Удаление тегов скриптов и стилей
+    text = re.sub(r'<(script|style|iframe|object|embed)[^>]*>.*?</\1>', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+    # 2. Форматирование таблиц замеров
+    if '<table' in text.lower():
+        text = repair_and_format_size_table(text, is_ukr=is_ukr)
+
+    # 3. Раскрытие тегов <a> в обычный текст
+    text = re.sub(r'<a\s+[^>]*>(.*?)</a>', r'\1', text, flags=re.DOTALL | re.IGNORECASE)
+
+    # 4. Удаление прямых ссылок
+    url_pattern = r'https?://[^\s<>"\'\]]+|www\.[^\s<>"\'\]]+'
+    text = re.sub(url_pattern, '', text, flags=re.IGNORECASE)
+
+    # 5. Удаление упоминаний доменов поставщиков и мессенджеров
+    domains = [
+        r'ager\.ua[^\s<>"\'\]]*', r'mydrop\.com\.ua[^\s<>"\'\]]*', r'spekylant\.com\.ua[^\s<>"\'\]]*',
+        r'bagsroom\.com\.ua[^\s<>"\'\]]*', r'kirs\.com\.ua[^\s<>"\'\]]*', r'easydrop\.one[^\s<>"\'\]]*',
+        r't\.me/[^\s<>"\'\]]+', r'instagram\.com/[^\s<>"\'\]]+', r'facebook\.com/[^\s<>"\'\]]+'
+    ]
+    for d in domains:
+        text = re.sub(d, '', text, flags=re.IGNORECASE)
+
+    # 6. Удаление номеров телефонов (+380..., (067)...)
+    phone_pattern = r'(?:\+?38[\s\-]?)?\(?0\d{2}\)?[\s\-\.]*\d{3}[\s\-\.]*\d{2}[\s\-\.]*\d{2}'
+    text = re.sub(phone_pattern, '', text)
+
+    # 7. Очистка лишних пустых строк и тегов переноса
+    text = re.sub(r'(<br\s*/?>\s*){3,}', '<br><br>', text, flags=re.IGNORECASE)
+    text = re.sub(r'(<p>\s*(&nbsp;|\s)*</p>\s*)+', '', text, flags=re.IGNORECASE)
+
+    return text.strip()
+
+
+def unify_variation_groups(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Синхронизирует параметры группы магазина и категорию Prom.ua для всех позиций,
+    имеющих одинаковый ID_групи_різновидів.
+    Правило Prom.ua: у основного товара и всех его разновидностей обязаны быть 100% одинаковыми:
+      - Номер_групи
+      - Назва_групи
+      - Ідентифікатор_групи
+      - Ідентифікатор_підрозділу
+    """
+    if df.empty or 'ID_групи_різновидів' not in df.columns:
+        return df
+
+    has_var = df['ID_групи_різновидів'].notna() & (df['ID_групи_різновидів'].astype(str).str.strip() != '') & (df['ID_групи_різновидів'].astype(str).str.strip() != '0')
+    if not has_var.any():
+        return df
+
+    logger.info(f"Синхронизация групп разновидностей для {has_var.sum()} позиций...")
+
+    var_groups = df[has_var].groupby(df.loc[has_var, 'ID_групи_різновидів'].astype(str).str.strip())
+
+    canonical_data = {}
+    for gid, group in var_groups:
+        exact_match = group[group['Ідентифікатор_товару'].astype(str).str.strip() == gid]
+        if not exact_match.empty:
+            parent_row = exact_match.iloc[0]
+        else:
+            with_cat = group[group['Ідентифікатор_підрозділу'].notna() & (group['Ідентифікатор_підрозділу'].astype(str).str.strip() != '')]
+            if not with_cat.empty:
+                parent_row = with_cat.iloc[0]
+            else:
+                parent_row = group.iloc[0]
+
+        c_num = str(parent_row.get('Номер_групи') or '').strip()
+        c_name = str(parent_row.get('Назва_групи') or '').strip()
+        c_gid = str(parent_row.get('Ідентифікатор_групи') or c_num).strip()
+        c_sub = str(parent_row.get('Ідентифікатор_підрозділу') or '').strip()
+
+        if not c_num:
+            for _, r in group.iterrows():
+                val = str(r.get('Номер_групи') or '').strip()
+                if val:
+                    c_num = val
+                    c_name = str(r.get('Назва_групи') or '').strip()
+                    c_gid = str(r.get('Ідентифікатор_групи') or val).strip()
+                    break
+
+        if not c_sub:
+            for _, r in group.iterrows():
+                val = str(r.get('Ідентифікатор_підрозділу') or '').strip()
+                if val:
+                    c_sub = val
+                    break
+
+        canonical_data[gid] = {
+            'Номер_групи': c_num,
+            'Назва_групи': c_name,
+            'Ідентифікатор_групи': c_gid,
+            'Ідентифікатор_підрозділу': c_sub
+        }
+
+    var_ids_series = df['ID_групи_різновидів'].astype(str).str.strip()
+
+    num_updates = 0
+    for col in ['Номер_групи', 'Назва_групи', 'Ідентифікатор_групи', 'Ідентифікатор_підрозділу']:
+        col_map = {gid: data[col] for gid, data in canonical_data.items() if data[col]}
+        mapped = var_ids_series.map(col_map)
+        mask = has_var & mapped.notna() & (mapped != '')
+        changes = (df.loc[mask, col].astype(str).str.strip() != mapped[mask]).sum()
+        if changes > 0:
+            logger.info(f"Колонка {col}: скорректировано {changes} разновидностей для совпадения с основным товаром.")
+            df.loc[mask, col] = mapped[mask]
+            num_updates += changes
+
+    logger.info(f"Синхронизация групп разновидностей завершена. Всего исправлений: {num_updates}")
+    return df
+
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ЭТАП 3: Жесткий маппинг категорий поставщиков на портальные категории Prom.ua
@@ -1752,6 +1969,12 @@ def transform_supplier_data(supplier_df, supplier_name, sheet_type, mapping):
 
             row_data['Особисті_нотатки'] = supplier_name
 
+            # Санитизация описаний и форматирование таблиц замеров (для исключения блокировок модерации Prom.ua)
+            if row_data.get('Опис'):
+                row_data['Опис'] = sanitize_description(row_data['Опис'], is_ukr=False)
+            if row_data.get('Опис_укр'):
+                row_data['Опис_укр'] = sanitize_description(row_data['Опис_укр'], is_ukr=True)
+
         for col in template_cols:
             data_dict[col].append(row_data.get(col, ''))
 
@@ -2117,8 +2340,11 @@ def main():
             ).fillna(0)
             merged_products = merged_products[price_num_final > 0].copy()
             if orig_total > len(merged_products):
-                logger.warning(f"Итоговая таблица: удалено {orig_total - len(merged_products)} позиций с некорректной/нулевой ценой!") if all_products \
-            else pd.DataFrame(columns=products_cols)
+                logger.warning(f"Итоговая таблица: удалено {orig_total - len(merged_products)} позиций с некорректной/нулевой ценой!")
+
+        # Унификация групп для всех разновидностей одного товара (ID_групи_різновидів)
+        merged_products = unify_variation_groups(merged_products)
+
         # Эталонное 3-уровневое дерево групп Prom.ua (62 группы: 5 корневых, 23 подраздела, 34 конечные с логистикой)
         merged_groups = get_canonical_groups_df()
 
