@@ -29,7 +29,7 @@ PUBLIC_URL = f'{R2_PUBLIC_DOMAIN}/{FILE_NAME}'
 # Токены магазинов кластера Prom.ua (CityStyle, BestSeller, VaillantVibe)
 # ⚠️ ПОЛНОСТЬЮ ЗАКОММЕНТИРОВАНО: Никаких отправок в магазины сейчас не производится!
 PROM_TOKENS = [
-    # os.getenv('PROM_TOKEN_City', 'PROM_TOKEN_City'),          # CityStyle (Флагман)
+     os.getenv('PROM_TOKEN_City', 'PROM_TOKEN_City'),          # CityStyle (Флагман)
     # os.getenv('PROM_TOKEN_Best', 'PROM_TOKEN_Best'),          # BestSeller (Сателлит)
     # os.getenv('PROM_TOKEN_Vaillant', 'PROM_TOKEN_Vaillant'),  # VaillantVibe (Сателлит)
 ]
