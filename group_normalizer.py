@@ -3,7 +3,7 @@
 Модуль нормализации и канонизации групп Prom.ua для мультидропшиппинга (IMPORT-PROM-UA-PLUS).
 
 Архитектура:
-1. 3-уровневое эталонное дерево (62 группы: 5 корневых, 23 подраздела, 34 конечные группы).
+1. 3-уровневое эталонное дерево (67 групп: 5 корневых, 24 подраздела, 38 конечных групп).
 2. Мульти-логистическая изоляция:
    - AGER: группы с суффиксом (НП / УП) -> Нова Пошта + Укрпошта
    - KIRS: группы с суффиксом (НП / МР) -> Нова Пошта + Точки видачі Rozetka
@@ -19,7 +19,7 @@ from typing import Tuple, Dict, Any, List
 logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ЭТАЛОННЫЙ КАТАЛОГ ГРУПП (62 группы)
+# ЭТАЛОННЫЙ КАТАЛОГ ГРУПП (67 групп)
 # ══════════════════════════════════════════════════════════════════════════════
 
 CANONICAL_GROUPS: List[Dict[str, str]] = [
@@ -36,6 +36,7 @@ CANONICAL_GROUPS: List[Dict[str, str]] = [
     {"id": "20103", "name": "Босоніжки, сандалі, шльопанці та сабо", "parent_id": "10001"},
     {"id": "20104", "name": "Туфлі, лофери та мокасини", "parent_id": "10001"},
     {"id": "20105", "name": "Домашнє взуття та кімнатні тапочки", "parent_id": "10001"},
+    {"id": "20106", "name": "Дитяче взуття", "parent_id": "10001"},
 
     # ── Уровень 3: Конечные группы для "Взуття" ──────────────────────────────
     # Кросівки та кеди
@@ -52,6 +53,11 @@ CANONICAL_GROUPS: List[Dict[str, str]] = [
     {"id": "30108", "name": "Туфлі, лофери та мокасини", "parent_id": "20104"},
     # Домашнє взуття та кімнатні тапочки
     {"id": "30109", "name": "Домашнє взуття та кімнатні тапочки (НП / УП)", "parent_id": "20105"},
+    # Дитяче взуття
+    {"id": "30111", "name": "Взуття для дівчаток (НП / УП)", "parent_id": "20106"},
+    {"id": "30112", "name": "Взуття для хлопчиків (НП / УП)", "parent_id": "20106"},
+    {"id": "30113", "name": "Дитяче взуття (НП / УП)", "parent_id": "20106"},
+    {"id": "30114", "name": "Дитяче взуття", "parent_id": "20106"},
 
     # ── Уровень 2: Подразделы для "Сумки, рюкзаки та валізи" (10002) ─────────
     {"id": "20201", "name": "Рюкзаки міські та спортивні", "parent_id": "10002"},
@@ -127,7 +133,7 @@ CANONICAL_GROUPS_BY_ID: Dict[str, Dict[str, str]] = {g["id"]: g for g in CANONIC
 
 def get_canonical_groups_df() -> pd.DataFrame:
     """
-    Формирует эталонный DataFrame структуры групп (62 строки)
+    Формирует эталонный DataFrame структуры групп (67 строк)
     для сохранения в лист 'Export Groups Sheet'.
     """
     rows = []
@@ -181,7 +187,18 @@ def resolve_product_group(supplier_name: str, raw_cat_id: str, product_title: st
 
     # 1. ПОСТАВЩИК: AGER (Логистика: Нова Пошта / Укрпошта -> суффикс (НП / УП))
     if supp == "AGER":
-        # 18 категорий обуви AGER
+        # ДЕТСКАЯ ОБУВЬ AGER: Вариант 2 с выделенными каноническими группами
+        if any(w in title for w in ["дівч", "девоч", "девч"]):
+            gid = "30111"
+            return gid, CANONICAL_GROUPS_BY_ID[gid]["name"]
+        elif any(w in title for w in ["хлопч", "хлоп’", "хлоп'", "мальч"]):
+            gid = "30112"
+            return gid, CANONICAL_GROUPS_BY_ID[gid]["name"]
+        elif any(w in title for w in ["дитяч", "детск", "підлітк", "подростк", "малюк", "малыш"]):
+            gid = "30113"
+            return gid, CANONICAL_GROUPS_BY_ID[gid]["name"]
+
+        # 18 категорий взрослой обуви AGER
         if cat_id in ["579", "580", "581", "582", "710"]:
             gid = "30101"
         elif cat_id in ["649", "705", "744"]:
@@ -336,6 +353,9 @@ def resolve_product_group(supplier_name: str, raw_cat_id: str, product_title: st
 
     # 6. ПОСТАВЩИК: IZIDROP (Логистика: Нова Пошта -> БЕЗ СУФФИКСА)
     if supp == "IZIDROP":
+        if any(w in title for w in ["дівч", "девоч", "девч", "хлопч", "хлоп’", "хлоп'", "мальч", "дитяч", "детск", "підлітк", "подростк", "малюк", "малыш"]):
+            gid = "30114"
+            return gid, CANONICAL_GROUPS_BY_ID[gid]["name"]
         if any(w in title for w in ["зимові", "зима", "winter", "ботинк", "черевик", "чобот", "угг"]):
             gid = "30104"
         elif any(w in title for w in ["crocs", "крокс", "сланц", "шльоп", "шлеп", "сабо", "в'єтнам", "вьетнам"]) or cat_id == "1740596413344":
@@ -346,6 +366,9 @@ def resolve_product_group(supplier_name: str, raw_cat_id: str, product_title: st
 
     # 7. ПОСТАВЩИК: MOYDROP (Логистика: Нова Пошта -> БЕЗ СУФФИКСА)
     if supp == "MOYDROP":
+        if any(w in title for w in ["дівч", "девоч", "девч", "хлопч", "хлоп’", "хлоп'", "мальч", "дитяч", "детск", "підлітк", "подростк", "малюк", "малыш"]):
+            gid = "30114"
+            return gid, CANONICAL_GROUPS_BY_ID[gid]["name"]
         if cat_id in ["169399", "169401", "93017"]:
             gid = "30104"
         elif cat_id in ["169403", "169410"]:
@@ -367,6 +390,9 @@ def resolve_product_group(supplier_name: str, raw_cat_id: str, product_title: st
 
     # 8. ПОСТАВЩИК: SPECULANT (Логистика: Нова Пошта -> БЕЗ СУФФИКСА)
     if supp == "SPECULANT":
+        if any(w in title for w in ["дівч", "девоч", "девч", "хлопч", "хлоп’", "хлоп'", "мальч", "дитяч", "детск", "підлітк", "подростк", "малюк", "малыш"]):
+            gid = "30114"
+            return gid, CANONICAL_GROUPS_BY_ID[gid]["name"]
         if any(w in title for w in ["черевик", "ботинк", "чобот", "угг"]):
             gid = "30104"
         elif any(w in title for w in ["босоніж", "сандал", "шльоп", "шлеп", "сабо", "крокс"]):
@@ -378,7 +404,9 @@ def resolve_product_group(supplier_name: str, raw_cat_id: str, product_title: st
         return gid, CANONICAL_GROUPS_BY_ID[gid]["name"]
 
     # Глобальный fallback по заголовку
-    if any(w in title for w in ["кросівк", "кед"]):
+    if any(w in title for w in ["дівч", "девоч", "девч", "хлопч", "хлоп’", "хлоп'", "мальч", "дитяч", "детск", "підлітк", "подростк", "малюк", "малыш"]):
+        gid = "30114"
+    elif any(w in title for w in ["кросівк", "кед"]):
         gid = "30102"
     elif any(w in title for w in ["рюкзак", "сумк"]):
         gid = "30202"

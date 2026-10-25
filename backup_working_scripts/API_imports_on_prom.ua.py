@@ -26,12 +26,21 @@ DELAY_BETWEEN_REQUESTS = int(os.getenv('DELAY_BETWEEN_REQUESTS', 20))
 FILE_NAME = 'import_data_heavy_vaillant.xlsx.gz'
 PUBLIC_URL = f'{R2_PUBLIC_DOMAIN}/{FILE_NAME}'
 
-# Токены магазинов кластера Prom.ua (CityStyle, BestSeller, VaillantVibe)
-# ⚠️ ПОЛНОСТЬЮ ЗАКОММЕНТИРОВАНО: Никаких отправок в магазины сейчас не производится!
-PROM_TOKENS = [
-    # os.getenv('PROM_TOKEN_City', 'PROM_TOKEN_City'),          # CityStyle (Флагман)
-    # os.getenv('PROM_TOKEN_Best', 'PROM_TOKEN_Best'),          # BestSeller (Сателлит)
-    # os.getenv('PROM_TOKEN_Vaillant', 'PROM_TOKEN_Vaillant'),  # VaillantVibe (Сателлит)
+# Конфигурация магазинов кластера Prom.ua (CityStyle, BestSeller, VaillantVibe)
+# Токены подтягиваются из переменных окружения / GitHub Secrets
+PROM_STORES = [
+    {
+        "name": "CityStyle (Флагман)",
+        "token": os.getenv('PROM_TOKEN_City') or os.getenv('PROM_TOKEN_CITY') or ''
+    },
+    {
+        "name": "BestSeller (Сателлит)",
+        "token": os.getenv('PROM_TOKEN_Best') or os.getenv('PROM_TOKEN_BEST') or ''
+    },
+    {
+        "name": "VaillantVibe (Сателлит)",
+        "token": os.getenv('PROM_TOKEN_Vaillant') or os.getenv('PROM_TOKEN_VAILLANT') or ''
+    },
 ]
 
 # ID Тяжелой таблицы-контент-банка (Эшелон 2)
@@ -104,20 +113,17 @@ def upload_to_r2(data):
 
 
 def trigger_prom_import():
-    """Запуск импорта контента в VaillantVibe по строго утвержденному стандарту Эшелона 2"""
-    # ⚠️ БОЕВОЕ ТЕСТИРОВАНИЕ: Отправка ссылки с архивом в Prom API ОТКЛЮЧЕНА!
-    print("5. [РЕЖИМ БОЕВОГО ТЕСТИРОВАНИЯ] Отправка ссылки с архивом в Prom API ОТКЛЮЧЕНА.")
-    print("   Архив успешно создан, сжат и выгружен на Cloudflare R2.")
-    print(f"   Публичный URL архива на Cloudflare R2: {PUBLIC_URL}")
-    print("   В реальный магазин Prom.ua ничего НЕ отправляется. Проверка таблиц безопасна.")
-    return
-
-def _disabled_trigger_prom_import():
+    """
+    Запуск асинхронного импорта контента в магазины Prom.ua по строго утвержденному стандарту Эшелона 2.
+    Отправляет POST https://my.prom.ua/api/v1/products/import_url со ссылкой на архив на Cloudflare R2.
+    """
     import_url = "https://my.prom.ua/api/v1/products/import_url"
 
-    # ЖЕСТКИЙ СТАНДАРТ ЭШЕЛОНА 2 ИЗ ВТОРОГО МОЗГА:
-    # only_update = True, mark_missing_product_as = 'none'
-    # Обновляем только SEO-запросы, названия и описания
+    # СТАНДАРТ ЭШЕЛОНА 2:
+    # only_update = True  -> обновлять только существующие позиции (не плодить дубли)
+    # mark_missing_product_as = 'none' -> отсутствующие товары НЕ удалять и НЕ скрывать
+    # force_update = True -> принудительное обновление контента
+    # updated_fields -> строгий белый список (SEO-слова, названия, описания с таблицами)
     payload = {
         "url": PUBLIC_URL,
         "force_update": True,
@@ -134,14 +140,23 @@ def _disabled_trigger_prom_import():
         ]
     }
 
-    is_first = True
+    print("5. Автоматическая отправка ссылки на архив в Prom API (Эшелон 2)...")
+    print(f"   Публичный URL архива: {PUBLIC_URL}")
 
-    for token in PROM_TOKENS:
-        if not token or token == 'токен_1' or token == 'PROM_TOKEN_Vaillant':
+    is_first = True
+    active_dispatches = 0
+
+    for store in PROM_STORES:
+        store_name = store["name"]
+        token = (store.get("token") or "").strip()
+
+        # Проверка валидности токена
+        if not token or token.startswith("PROM_TOKEN") or token in ["токен_1", ""]:
+            print(f"   [Пропуск] {store_name}: API-токен не настроен в GitHub Secrets.")
             continue
 
         if is_first:
-            print(f"   Ожидание {DELAY_BEFORE_FIRST} сек. перед отправкой...")
+            print(f"   Ожидание {DELAY_BEFORE_FIRST} сек. перед первой отправкой...")
             time.sleep(DELAY_BEFORE_FIRST)
             is_first = False
         else:
@@ -155,14 +170,22 @@ def _disabled_trigger_prom_import():
         }
 
         try:
-            response = requests.post(import_url, json=payload, headers=headers)
+            print(f"   -> Отправка запроса на импорт для {store_name}...")
+            response = requests.post(import_url, json=payload, headers=headers, timeout=60)
             if response.status_code == 200:
                 data = response.json()
-                print(f"   [OK] Магазин VaillantVibe ({token[:10]}...). Импорт запущен. ID: {data.get('id')}")
+                import_id = data.get('id', 'N/A')
+                print(f"   [OK] {store_name}: Импорт успешно запущен на Prom.ua! ID задачи: {import_id}")
+                active_dispatches += 1
             else:
-                print(f"   [Error] {token[:10]}: {response.status_code} - {response.text}")
+                print(f"   [Error] {store_name}: HTTP {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"   [Exception] Ошибка при запросе к Prom: {e}")
+            print(f"   [Exception] Ошибка при запросе к Prom.ua для {store_name}: {e}")
+
+    if active_dispatches == 0:
+        print("   [Инфо] Ни один активный токен магазина не был обработан (проверьте секреты PROM_TOKEN_*).")
+    else:
+        print(f"   [Успех] Запущено задач импорта: {active_dispatches}.")
 
 
 if __name__ == "__main__":
@@ -171,6 +194,6 @@ if __name__ == "__main__":
         gzipped_xlsx = process_xlsx(raw_xlsx)
         upload_to_r2(gzipped_xlsx)
         trigger_prom_import()
-        print("\nГотово! Тяжелый архив отправлен в Prom API для VaillantVibe.")
+        print("\nГотово! Тяжелый архив сформирован, выгружен на R2 и отправлен в Prom API.")
     except Exception as e:
         print(f"\nКритическая ошибка: {e}")

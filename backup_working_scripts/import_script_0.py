@@ -1865,6 +1865,16 @@ def resolve_portal_category(supp_cat_id: str, title: str, supplier_name: str) ->
 
     title_lower = str(title).lower().strip()
 
+    # Детекция детской обуви для портала Prom.ua
+    if any(w in title_lower for w in ["дівч", "девоч", "девч", "хлопч", "хлоп’", "хлоп'", "мальч", "дитяч", "детск", "підлітк", "подростк", "малюк", "малыш"]):
+        if any(w in title_lower for w in ["кросівк", "кроссовк", "кед"]):
+            return "3221214"  # дитячі та підліткові кросівки, кеди
+        if any(w in title_lower for w in ["ботинк", "черевик", "чобот", "угг", "зимов", "winter"]):
+            return "3221211"  # дитяче та підліткове зимове взуття
+        if any(w in title_lower for w in ["босоніж", "сандал", "шльоп", "шлеп", "сабо", "літн", "летн"]):
+            return "3221206"  # дитяче та підліткове літнє взуття
+        return "3221299"      # дитяче та підліткове взуття, загальне
+
     # Специфические эвристики для IZIDROP (только обувь)
     if supplier_name == "IZIDROP":
         if any(w in title_lower for w in ["зимов", "winter", "угг", "ботинк", "черевик"]):
