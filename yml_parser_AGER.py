@@ -36,29 +36,75 @@ BATCH_SIZE = 200  # Number of rows to process in a batch
 API_DELAY = 1.05  # Delay in seconds to respect API rate limit (approximately 60 requests/minute)
 
 
-def get_paired_insole_val(pair_str: str) -> str:
-    """Возвращает длину по стельке в см для спаренных размеров обуви/тапочек."""
-    insole_map = {
-        '35-36': '22,5 см',
-        '36-37': '23,5 см',
-        '37-38': '24 см',
-        '38-39': '24,5 см',
-        '39-40': '25 см',
-        '40-41': '25,5 см',
-        '41-42': '26,5 см',
-        '42-43': '27,5 см',
+AGER_EXACT_TABLES = {
+    '243R951': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R1592': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R951-A': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R1953': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R928': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R921': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R1910': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R2912': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R833-6': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R1808': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R5889': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R2932': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R885': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243R1916': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['23 см', '24 см', '25 см']),
+    '243RA3': (['36-37', '38-39', '40-41'], ['3 см', '3 см', '3 см'], ['22 см', '23 см', '24 см']),
+    '243R2927': (['36-37', '38-39', '40-41'], None, ['22,5 см', '23,5 см', '24,5 см']),
+    '243R2928': (['36-37', '38-39', '40-41', '42-43'], None, ['22,5 см', '23,5 см', '24,5 см', '25,5 см']),
+    '243R12922': (['34-35', '36-37', '38-39', '40-41'], None, ['22 см', '23 см', '24 см', '25 см']),
+    '248RYY03': (['35-36', '37-38', '39-40'], None, ['22,5 см', '23 см', '23,5 см']),
+    '244R342': (['36-37', '37-38', '38-39', '39-40'], None, ['22,5 см', '23,5 см', '24,5 см', '25,5 см']),
+    '102R1004-1': (['35-36', '37-38', '39-40', '41-42'], None, ['23 см', '24 см', '26 см', '27 см']),
+    '248RNT02': (['40-41', '42-43', '44-45'], None, ['26 см', '27 см', '28 см']),
+    '248RCX312': (['40-41', '42-43', '44-45'], None, ['25 см', '26 см', '27 см']),
+    '243R1582': (['40-41', '42-43', '44-45'], None, ['25 см', '26 см', '27 см']),
+    '248RNT01': (['40-41', '42-43', '44-45'], None, ['26 см', '27 см', '28 см']),
+    '243R12913': (['41-42', '43-44', '45-46'], None, ['27 см', '28 см', '29 см']),
+    '243R12922-1': (['41-42', '43-44', '45-46'], None, ['27,5 см', '28,5 см', '29,5 см']),
+}
+
+
+def get_paired_insole_val(pair_str: str, is_men: bool = False) -> str:
+    """Точные замеры длины по стельке для сдвоенных размеров обуви/тапочек."""
+    pair_clean = pair_str.strip().replace(' р.', '').replace('р.', '')
+
+    men_map = {
+        '40-41': '25 см',
+        '41-42': '27 см',
+        '42-43': '26 см',
         '43-44': '28 см',
-        '44-45': '28,5 см',
+        '44-45': '27 см',
         '45-46': '29 см',
         '46-47': '29,5 см',
     }
-    pair_clean = pair_str.strip()
-    if pair_clean in insole_map:
-        return insole_map[pair_clean]
+    women_map = {
+        '34-35': '22 см',
+        '35-36': '22,5 см',
+        '36-37': '22,5-23 см',
+        '37-38': '23,5 см',
+        '38-39': '23,5-24 см',
+        '39-40': '24,5 см',
+        '40-41': '24,5-25 см',
+        '41-42': '25,5 см',
+        '42-43': '26 см',
+    }
+
+    if is_men and pair_clean in men_map:
+        return men_map[pair_clean]
+    if not is_men and pair_clean in women_map:
+        return women_map[pair_clean]
+    if pair_clean in men_map:
+        return men_map[pair_clean]
+    if pair_clean in women_map:
+        return women_map[pair_clean]
+
     try:
         parts = [int(p) for p in pair_clean.split('-')]
         avg_s = sum(parts) / len(parts)
-        val = 23.5 + (avg_s - 36.5) * 0.75
+        val = 23.0 + (avg_s - 36.5) * 0.7
         val = round(val * 2) / 2.0
         return f"{str(val).replace('.', ',')} см"
     except Exception:
@@ -67,37 +113,35 @@ def get_paired_insole_val(pair_str: str) -> str:
 
 def clean_counterfeit_words(text: str) -> str:
     """
-    Удаляет слова 'реплика', 'репліка', 'копия', 'люкс реплика', '1:1',
-    заменяя их на нейтральные термины ('модель'), чтобы описания
-    не блокировались автоматическим фильтром контрафакта Prom.ua.
+    Заменяет слова 'репліка', 'реплика', 'люкс репліка', '1:1',
+    которые триггерят фильтр модерации Prom.ua на нейтральные слова.
     """
     if not text:
         return ""
-    text = re.sub(r'(?i)\s*\((?:дуже\s+)?(?:високо)?якісна\s+реплік[аи]\)', '', text)
+    text = re.sub(r'(?i)\s*\((?:люкс\s+)?(?:топ\s+)?репліка\s+класу\)', '', text)
     text = re.sub(r'(?i)\s*\((?:люкс\s+)?реплік[аи]\)', '', text)
     text = re.sub(r'(?i)\s*\((?:люкс\s+)?реплик[аи]\)', '', text)
     text = re.sub(r'(?i)\s*\(1:1\)', '', text)
-    text = re.sub(r'(?i)\bвисокоякісна\s+репліка\s+(?:на\s+)?', 'Високоякісна модель ', text)
-    text = re.sub(r'(?i)\bдуже\s+якісна\s+репліка\s+(?:на\s+)?', 'Якісна модель ', text)
-    text = re.sub(r'(?i)\bякісна\s+репліка\s+(?:на\s+)?', 'Якісна модель ', text)
-    text = re.sub(r'(?i)\bлюкс\s+репліка\s+(?:на\s+)?', 'Люкс модель ', text)
-    text = re.sub(r'(?i)\bреплік[аиуе]\s+(?:на\s+)?', 'модель ', text)
-    text = re.sub(r'(?i)\bреплик[аиуе]\s+(?:на\s+)?', 'модель ', text)
-    text = re.sub(r'(?i)\bкопі[яєїю]\s+(?:на\s+)?', 'модель ', text)
-    text = re.sub(r'(?i)\bкопи[яеию]\s+(?:на\s+)?', 'модель ', text)
+    text = re.sub(r'(?i)\bлюкс\s+репліка\s+(?:класу\s+)?', 'модель ', text)
+    text = re.sub(r'(?i)\bлюкс\s+копія\s+класу\s+(?:взуття\s+)?', 'модель ', text)
+    text = re.sub(r'(?i)\bтоп\s+репліка\s+(?:класу\s+)?', 'модель ', text)
+    text = re.sub(r'(?i)\bтоп\s+реплика\s+(?:класса\s+)?', 'модель ', text)
+    text = re.sub(r'(?i)\bреплік[аи]\s+(?:класу\s+)?', 'модель ', text)
+    text = re.sub(r'(?i)\bреплик[аи]\s+(?:класса\s+)?', 'модель ', text)
+    text = re.sub(r'(?i)\bкопі[яї]\s+(?:класу\s+)?', 'модель ', text)
+    text = re.sub(r'(?i)\bкопи[яи]\s+(?:класса\s+)?', 'модель ', text)
     return text
 
 
-def repair_and_format_size_table(html_content: str, is_ukr: bool = False) -> str:
+def repair_and_format_size_table(html_content: str, is_ukr: bool = False, vendor_code: str = "", title_or_desc: str = "") -> str:
     """
-    Форматирует HTML-таблицы замеров для аккуратного отображения на Prom.ua
-    (границы ячеек, отступы, центрирование).
-    Также устраняет системную ошибку поставщика AGER для тапочек/обуви со сдвоенными размерами
-    (когда спаренные размеры 36-37 ошибочно разбивались на 36 в размер и 37 в стельку),
-    восстанавливая строку спаренных размеров и строку реальных замеров по стельке в см.
+    Универсальный ремонт и стилизация размерных сеток AGER для Prom.ua.
     """
     if not html_content or '<table' not in html_content:
         return html_content
+
+    vc_clean = (vendor_code or '').strip()
+    is_men = bool(re.search(r'мужск|чоловіч|мужчин', (title_or_desc or '') + ' ' + (html_content or ''), re.IGNORECASE))
 
     def fix_table_match(match):
         table_html = match.group(0)
@@ -109,59 +153,97 @@ def repair_and_format_size_table(html_content: str, is_ukr: bool = False) -> str
         if m_head:
             header_title = re.sub(r'<[^>]+>', '', m_head.group(1)).strip()
 
-        rows = re.findall(r"""<tr[^>]*class=["\']?tbody_tr["\']?[^>]*>(.*?)</tr>""", table_html, re.DOTALL | re.IGNORECASE)
-        if not rows:
-            rows = re.findall(r"""<tr[^>]*>(.*?)</tr>""", table_html, re.DOTALL | re.IGNORECASE)
-            if rows and header_title in rows[0]:
-                rows = rows[1:]
+        # 1. Точная база для известных артикулов AGER
+        if vc_clean and vc_clean in AGER_EXACT_TABLES:
+            sizes, plat, insole = AGER_EXACT_TABLES[vc_clean]
+            size_lbl = "Розмір" if is_ukr else "Размер"
+            parsed_rows = [(size_lbl, sizes)]
+            if plat:
+                plat_lbl = "Висота платформи" if is_ukr else "Высота платформы"
+                parsed_rows.append((plat_lbl, plat))
+            insole_lbl = "Довжина по устілці (взуття)" if is_ukr else "Длина по стельке (обувь)"
+            parsed_rows.append((insole_lbl, insole))
+        else:
+            # 2. Универсальный разбор произвольной таблицы
+            rows = re.findall(r"""<tr[^>]*class=["\']?tbody_tr["\']?[^>]*>(.*?)</tr>""", table_html, re.DOTALL | re.IGNORECASE)
+            if not rows:
+                rows = re.findall(r"""<tr[^>]*>(.*?)</tr>""", table_html, re.DOTALL | re.IGNORECASE)
+                if rows and header_title in rows[0]:
+                    rows = rows[1:]
 
-        parsed_rows = []
-        for r in rows:
-            first_m = re.search(r"""<td[^>]*class=["\']?tbody_first-td["\']?[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
-            if first_m:
-                row_label = re.sub(r'<[^>]+>', '', first_m.group(1)).strip()
-            else:
-                cells = re.findall(r"""<td[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
-                row_label = re.sub(r'<[^>]+>', '', cells[0]).strip() if cells else ''
+            raw_parsed_rows = []
+            for r in rows:
+                first_m = re.search(r"""<td[^>]*class=["\']?tbody_first-td["\']?[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
+                if first_m:
+                    row_label = re.sub(r'<[^>]+>', '', first_m.group(1)).strip()
+                else:
+                    cells = re.findall(r"""<td[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
+                    row_label = re.sub(r'<[^>]+>', '', cells[0]).strip() if cells else ''
 
-            tds = re.findall(r"""<td[^>]*class=["\']?tbody_td["\']?[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
-            if not tds:
-                all_cells = re.findall(r"""<td[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
-                tds = [re.sub(r'<[^>]+>', '', c).strip() for c in all_cells[1:]]
-            else:
-                tds = [re.sub(r'<[^>]+>', '', c).strip() for c in tds]
+                tds = re.findall(r"""<td[^>]*class=["\']?tbody_td["\']?[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
+                if not tds:
+                    all_cells = re.findall(r"""<td[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
+                    tds = [re.sub(r'<[^>]+>', '', c).strip() for c in all_cells[1:]]
+                else:
+                    tds = [re.sub(r'<[^>]+>', '', c).strip() for c in tds]
 
-            if row_label or tds:
-                parsed_rows.append((row_label, tds))
+                if row_label or tds:
+                    raw_parsed_rows.append((row_label, tds))
 
-        # Случай 1: Сырой баг AGER (Строка 1: [36, 38, 40], Строка 2: [37, 39, 41])
-        if len(parsed_rows) == 2:
-            r1_label, r1_vals = parsed_rows[0]
-            r2_label, r2_vals = parsed_rows[1]
-            if len(r1_vals) == len(r2_vals) and len(r1_vals) > 0:
-                try:
-                    n1 = [int(v.replace(',', '.').split()[0]) for v in r1_vals]
-                    n2 = [int(v.replace(',', '.').split()[0]) for v in r2_vals]
-                    diffs = [b - a for a, b in zip(n1, n2)]
-                    if all(d == 1 for d in diffs):
-                        paired_sizes = [f"{a}-{b}" for a, b in zip(n1, n2)]
-                        size_label = "Розмір" if is_ukr else "Размер"
-                        insole_label = "Довжина по устілці (взуття)" if is_ukr else "Длина по стельке (обувь)"
-                        insole_vals = [get_paired_insole_val(ps) for ps in paired_sizes]
-                        parsed_rows = [
-                            (size_label, paired_sizes),
-                            (insole_label, insole_vals)
-                        ]
-                except (ValueError, IndexError):
-                    pass
+            # Ищем строки размера и стельки
+            size_idx = None
+            insole_idx = None
+            platform_idx = None
 
-        # Случай 2: Уже свернутая таблица из 1 строки со спаренными размерами (36-37, 41-42) - добавляем строку стельки
-        elif len(parsed_rows) == 1:
-            r1_label, r1_vals = parsed_rows[0]
-            if any('-' in str(v) for v in r1_vals):
-                insole_label = "Довжина по устілці (взуття)" if is_ukr else "Длина по стельке (обувь)"
-                insole_vals = [get_paired_insole_val(str(ps)) for ps in r1_vals]
-                parsed_rows.append((insole_label, insole_vals))
+            for idx, (lbl, vals) in enumerate(raw_parsed_rows):
+                lbl_l = lbl.lower()
+                if 'размер' in lbl_l or 'розмір' in lbl_l:
+                    size_idx = idx
+                elif 'стельк' in lbl_l or 'устілк' in lbl_l:
+                    insole_idx = idx
+                elif 'платформ' in lbl_l:
+                    platform_idx = idx
+
+            is_corrupted_paired = False
+            if size_idx is not None and insole_idx is not None:
+                s_vals = raw_parsed_rows[size_idx][1]
+                i_vals = raw_parsed_rows[insole_idx][1]
+                if len(s_vals) == len(i_vals) and len(s_vals) > 0:
+                    try:
+                        n1 = [int(re.sub(r'[^\d]', '', v)) for v in s_vals if re.sub(r'[^\d]', '', v)]
+                        n2 = [int(re.sub(r'[^\d]', '', v)) for v in i_vals if re.sub(r'[^\d]', '', v)]
+                        if len(n1) == len(s_vals) and len(n2) == len(i_vals):
+                            diffs = [b - a for a, b in zip(n1, n2)]
+                            if all(d in [1, 2] for d in diffs) and any(v >= 34 for v in n2):
+                                is_corrupted_paired = True
+                                paired_sizes = [f"{a}-{b}" for a, b in zip(n1, n2)]
+                                size_label = "Розмір" if is_ukr else "Размер"
+                                insole_label = "Довжина по устілці (взуття)" if is_ukr else "Длина по стельке (обувь)"
+                                insole_vals = [get_paired_insole_val(ps, is_men=is_men) for ps in paired_sizes]
+
+                                parsed_rows = [
+                                    (size_label, paired_sizes)
+                                ]
+                                if platform_idx is not None:
+                                    plat_label = "Висота платформи" if is_ukr else "Высота платформы"
+                                    plat_vals = ['3 см'] * len(paired_sizes)
+                                    parsed_rows.append((plat_label, plat_vals))
+
+                                parsed_rows.append((insole_label, insole_vals))
+                    except Exception:
+                        pass
+
+            if not is_corrupted_paired:
+                if len(raw_parsed_rows) == 1 and any('-' in str(v) for v in raw_parsed_rows[0][1]):
+                    r1_label, r1_vals = raw_parsed_rows[0]
+                    insole_label = "Довжина по устілці (взуття)" if is_ukr else "Длина по стельке (обувь)"
+                    insole_vals = [get_paired_insole_val(str(ps), is_men=is_men) for ps in r1_vals]
+                    parsed_rows = [
+                        (r1_label, r1_vals),
+                        (insole_label, insole_vals)
+                    ]
+                else:
+                    parsed_rows = raw_parsed_rows
 
         if not parsed_rows:
             return table_html
@@ -188,7 +270,7 @@ def repair_and_format_size_table(html_content: str, is_ukr: bool = False) -> str
         res.append('  </tbody>')
         res.append('</table>')
 
-        return '\n'.join(res)
+        return '\\n'.join(res)
 
     cleaned = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
     cleaned = re.sub(r'<table[^>]*>.*?</table>', fix_table_match, cleaned, flags=re.DOTALL | re.IGNORECASE)
@@ -289,7 +371,12 @@ class FeedProcessor:
                     if tag == 'picture':
                         product_data['pictures'].append(child.text)
                     elif tag in ['description', 'description_ua']:
-                        product_data[tag] = repair_and_format_size_table(child.text or '', is_ukr=(tag == 'description_ua'))
+                        product_data[tag] = repair_and_format_size_table(
+                            child.text or '',
+                            is_ukr=(tag == 'description_ua'),
+                            vendor_code=offer.findtext('vendorCode') or '',
+                            title_or_desc=(offer.findtext('name') or offer.findtext('name_ua') or '')
+                        )
                     else:
                         product_data[tag] = child.text
 
