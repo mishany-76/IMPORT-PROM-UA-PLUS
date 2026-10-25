@@ -147,11 +147,17 @@ def repair_and_format_size_table(html_content: str, is_ukr: bool = False, vendor
         table_html = match.group(0)
 
         header_title = "Заміри (фактичні заміри можуть відрізнятися +- 2 см)" if is_ukr else "Замеры (фактические замеры могут отличаться +- 2 см)"
-        m_head = re.search(r"""<td[^>]*class=["\']?thead_td["\']?[^>]*>(.*?)</td>""", table_html, re.DOTALL | re.IGNORECASE)
+        m_head = re.search(r"""<td[^>]*class=["']?thead_td["']?[^>]*>(.*?)</td>""", table_html, re.DOTALL | re.IGNORECASE)
         if not m_head:
             m_head = re.search(r"""<th[^>]*>(.*?)</th>""", table_html, re.DOTALL | re.IGNORECASE)
         if m_head:
-            header_title = re.sub(r'<[^>]+>', '', m_head.group(1)).strip()
+            clean_head = re.sub(r'<[^>]+>', '', m_head.group(1))
+            clean_head = clean_head.replace("\\n", " ").replace("\\r", " ").replace("\n", " ").replace("\r", " ")
+            clean_head = re.sub(r'\s+', ' ', clean_head).strip()
+            if is_ukr:
+                header_title = "Заміри (фактичні заміри можуть відрізнятися +- 2 см)"
+            elif clean_head:
+                header_title = clean_head
 
         # 1. Точная база для известных артикулов AGER
         if vc_clean and vc_clean in AGER_EXACT_TABLES:
@@ -252,25 +258,25 @@ def repair_and_format_size_table(html_content: str, is_ukr: bool = False, vendor
 
         res = [
             f'<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%; border: 1px solid #dcdcdc; text-align: center; margin: 12px 0;">',
-            f'  <thead>',
-            f'    <tr style="background-color: #f7f7f7; font-weight: bold;">',
-            f'      <th colspan="{col_count}" style="padding: 8px 12px; border: 1px solid #dcdcdc; text-align: center; font-size: 13px;">{header_title}</th>',
-            f'    </tr>',
-            f'  </thead>',
-            f'  <tbody>'
+            '<thead>',
+            '<tr style="background-color: #f7f7f7; font-weight: bold;">',
+            f'<th colspan="{col_count}" style="padding: 8px 12px; border: 1px solid #dcdcdc; text-align: center; font-size: 13px;">{header_title}</th>',
+            '</tr>',
+            '</thead>',
+            '<tbody>'
         ]
 
         for r_label, r_vals in parsed_rows:
-            res.append('    <tr>')
-            res.append(f'      <td style="padding: 7px 10px; border: 1px solid #dcdcdc; background-color: #fafafa; font-weight: 600; text-align: left; font-size: 13px;">{r_label}</td>')
+            res.append('<tr>')
+            res.append(f'<td style="padding: 7px 10px; border: 1px solid #dcdcdc; background-color: #fafafa; font-weight: 600; text-align: left; font-size: 13px;">{r_label}</td>')
             for val in r_vals:
-                res.append(f'      <td style="padding: 7px 10px; border: 1px solid #dcdcdc; text-align: center; font-size: 13px;">{val}</td>')
-            res.append('    </tr>')
+                res.append(f'<td style="padding: 7px 10px; border: 1px solid #dcdcdc; text-align: center; font-size: 13px;">{val}</td>')
+            res.append('</tr>')
 
-        res.append('  </tbody>')
+        res.append('</tbody>')
         res.append('</table>')
 
-        return '\\n'.join(res)
+        return ''.join(res)
 
     cleaned = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
     cleaned = re.sub(r'<table[^>]*>.*?</table>', fix_table_match, cleaned, flags=re.DOTALL | re.IGNORECASE)
