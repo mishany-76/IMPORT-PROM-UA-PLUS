@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import sys
 import time
 import requests
@@ -33,6 +34,98 @@ PRODUCT_SHEET_NAME = 'Export Products Sheet'
 CATEGORY_SHEET_NAME = 'Export Groups Sheet'
 BATCH_SIZE = 200  # Number of rows to process in a batch
 API_DELAY = 1.05  # Delay in seconds to respect API rate limit (approximately 60 requests/minute)
+
+
+def repair_and_format_size_table(html_content: str, is_ukr: bool = False) -> str:
+    """
+    Форматирует HTML-таблицы замеров для аккуратного отображения на Prom.ua
+    (границы ячеек, отступы, центрирование).
+    Также устраняет системную ошибку поставщика AGER для тапочек/обуви со сдвоенными размерами
+    (когда спаренные размеры 36-37 ошибочно разбивались на 36 в размер и 37 в стельку).
+    """
+    if not html_content or '<table' not in html_content:
+        return html_content
+
+    def fix_table_match(match):
+        table_html = match.group(0)
+
+        header_title = "Заміри (фактичні заміри можуть відрізнятися +- 2 см)" if is_ukr else "Замеры (фактические замеры могут отличаться +- 2 см)"
+        m_head = re.search(r"""<td[^>]*class=["']?thead_td["']?[^>]*>(.*?)</td>""", table_html, re.DOTALL | re.IGNORECASE)
+        if m_head:
+            header_title = re.sub(r'<[^>]+>', '', m_head.group(1)).strip()
+
+        rows = re.findall(r"""<tr[^>]*class=["']?tbody_tr["']?[^>]*>(.*?)</tr>""", table_html, re.DOTALL | re.IGNORECASE)
+        if not rows:
+            rows = re.findall(r'<tr[^>]*>(.*?)</tr>', table_html, re.DOTALL | re.IGNORECASE)
+            if rows and header_title in rows[0]:
+                rows = rows[1:]
+
+        parsed_rows = []
+        for r in rows:
+            first_m = re.search(r"""<td[^>]*class=["']?tbody_first-td["']?[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
+            if first_m:
+                row_label = re.sub(r'<[^>]+>', '', first_m.group(1)).strip()
+            else:
+                cells = re.findall(r'<td[^>]*>(.*?)</td>', r, re.DOTALL | re.IGNORECASE)
+                row_label = re.sub(r'<[^>]+>', '', cells[0]).strip() if cells else ''
+
+            tds = re.findall(r"""<td[^>]*class=["']?tbody_td["']?[^>]*>(.*?)</td>""", r, re.DOTALL | re.IGNORECASE)
+            if not tds:
+                all_cells = re.findall(r'<td[^>]*>(.*?)</td>', r, re.DOTALL | re.IGNORECASE)
+                tds = [re.sub(r'<[^>]+>', '', c).strip() for c in all_cells[1:]]
+            else:
+                tds = [re.sub(r'<[^>]+>', '', c).strip() for c in tds]
+
+            if row_label or tds:
+                parsed_rows.append((row_label, tds))
+
+        # Проверка и исправление бага сдвоенных размеров AGER
+        # Строка 1: Размер [36, 38, 40] и Строка 2: Длина по стельке [37, 39, 41]
+        if len(parsed_rows) == 2:
+            r1_label, r1_vals = parsed_rows[0]
+            r2_label, r2_vals = parsed_rows[1]
+            if len(r1_vals) == len(r2_vals) and len(r1_vals) > 0:
+                try:
+                    n1 = [int(v.replace(',', '.').split()[0]) for v in r1_vals]
+                    n2 = [int(v.replace(',', '.').split()[0]) for v in r2_vals]
+                    diffs = [b - a for a, b in zip(n1, n2)]
+                    if all(d == 1 for d in diffs):
+                        paired_sizes = [f"{a}-{b}" for a, b in zip(n1, n2)]
+                        label = "Розмір" if is_ukr else "Размер"
+                        parsed_rows = [(label, paired_sizes)]
+                except (ValueError, IndexError):
+                    pass
+
+        if not parsed_rows:
+            return table_html
+
+        col_count = max(len(r[1]) for r in parsed_rows) + 1
+
+        res = [
+            f'<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%; border: 1px solid #dcdcdc; text-align: center; margin: 12px 0;">',
+            f'  <thead>',
+            f'    <tr style="background-color: #f7f7f7; font-weight: bold;">',
+            f'      <th colspan="{col_count}" style="padding: 8px 12px; border: 1px solid #dcdcdc; text-align: center; font-size: 13px;">{header_title}</th>',
+            f'    </tr>',
+            f'  </thead>',
+            f'  <tbody>'
+        ]
+
+        for r_label, r_vals in parsed_rows:
+            res.append('    <tr>')
+            res.append(f'      <td style="padding: 7px 10px; border: 1px solid #dcdcdc; background-color: #fafafa; font-weight: 600; text-align: left; font-size: 13px;">{r_label}</td>')
+            for val in r_vals:
+                res.append(f'      <td style="padding: 7px 10px; border: 1px solid #dcdcdc; text-align: center; font-size: 13px;">{val}</td>')
+            res.append('    </tr>')
+
+        res.append('  </tbody>')
+        res.append('</table>')
+
+        return '\n'.join(res)
+
+    cleaned = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<table[^>]*>.*?</table>', fix_table_match, cleaned, flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.strip()
 
 
 class FeedProcessor:
@@ -128,6 +221,8 @@ class FeedProcessor:
                     # Handle pictures separately
                     if tag == 'picture':
                         product_data['pictures'].append(child.text)
+                    elif tag in ['description', 'description_ua']:
+                        product_data[tag] = repair_and_format_size_table(child.text or '', is_ukr=(tag == 'description_ua'))
                     else:
                         product_data[tag] = child.text
 
@@ -473,6 +568,10 @@ class FeedProcessor:
         """
         try:
             sheet_data = self.get_sheet_data(sheet_name)
+            if not current_ids:
+                logger.warning(f"current_ids пусто для {sheet_name}. Пропуск удаления для защиты от стирания данных.")
+                return
+
             if not sheet_data:
                 return
 
@@ -495,6 +594,7 @@ class FeedProcessor:
             # Delete rows in reverse order to avoid shifting indices
             if rows_to_delete:
                 rows_to_delete.sort(reverse=True)
+                target_sheet_id = self._get_sheet_id(sheet_name)
 
                 # Delete in batches to respect API limits
                 batch_size = 20  # Smaller batch for delete operations
@@ -506,7 +606,7 @@ class FeedProcessor:
                         requests.append({
                             'deleteDimension': {
                                 'range': {
-                                    'sheetId': self._get_sheet_id(sheet_name),
+                                    'sheetId': target_sheet_id,
                                     'dimension': 'ROWS',
                                     'startIndex': row_index - 1,  # Convert to 0-indexed
                                     'endIndex': row_index  # End is exclusive
@@ -530,11 +630,20 @@ class FeedProcessor:
             raise
 
     def _get_sheet_id(self, sheet_name: str) -> int:
-        """Get the sheet ID for a given sheet name."""
+        """Get the sheet ID for a given sheet name (cached to avoid 429 quota exhaustion)."""
+        if not hasattr(self, '_sheet_ids_cache'):
+            self._sheet_ids_cache = {}
+        if sheet_name in self._sheet_ids_cache:
+            return self._sheet_ids_cache[sheet_name]
+
         sheet_metadata = self.service.get(spreadsheetId=self.spreadsheet_id).execute()
         for sheet in sheet_metadata.get('sheets', []):
-            if sheet['properties']['title'] == sheet_name:
-                return sheet['properties']['sheetId']
+            title = sheet['properties']['title']
+            s_id = sheet['properties']['sheetId']
+            self._sheet_ids_cache[title] = s_id
+
+        if sheet_name in self._sheet_ids_cache:
+            return self._sheet_ids_cache[sheet_name]
         raise ValueError(f"Sheet {sheet_name} not found")
 
     def update_sheet_in_batches(self, sheet_name: str, data: List[List], id_column: str):
@@ -597,6 +706,7 @@ class FeedProcessor:
                 # Delete duplicate rows
                 if rows_to_delete:
                     rows_to_delete.sort(reverse=True)  # Delete from bottom up
+                    target_sheet_id = self._get_sheet_id(sheet_name)
 
                     # Delete in batches
                     batch_size = 20
@@ -608,7 +718,7 @@ class FeedProcessor:
                             requests.append({
                                 'deleteDimension': {
                                     'range': {
-                                        'sheetId': self._get_sheet_id(sheet_name),
+                                        'sheetId': target_sheet_id,
                                         'dimension': 'ROWS',
                                         'startIndex': row_index,  # Row index is already 1-based
                                         'endIndex': row_index + 1  # End is exclusive

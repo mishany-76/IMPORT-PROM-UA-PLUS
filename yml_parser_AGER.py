@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import sys
 import time
 import requests
@@ -567,6 +568,10 @@ class FeedProcessor:
         """
         try:
             sheet_data = self.get_sheet_data(sheet_name)
+            if not current_ids:
+                logger.warning(f"current_ids пусто для {sheet_name}. Пропуск удаления для защиты от стирания данных.")
+                return
+
             if not sheet_data:
                 return
 
@@ -589,6 +594,7 @@ class FeedProcessor:
             # Delete rows in reverse order to avoid shifting indices
             if rows_to_delete:
                 rows_to_delete.sort(reverse=True)
+                target_sheet_id = self._get_sheet_id(sheet_name)
 
                 # Delete in batches to respect API limits
                 batch_size = 20  # Smaller batch for delete operations
@@ -600,7 +606,7 @@ class FeedProcessor:
                         requests.append({
                             'deleteDimension': {
                                 'range': {
-                                    'sheetId': self._get_sheet_id(sheet_name),
+                                    'sheetId': target_sheet_id,
                                     'dimension': 'ROWS',
                                     'startIndex': row_index - 1,  # Convert to 0-indexed
                                     'endIndex': row_index  # End is exclusive
@@ -624,11 +630,20 @@ class FeedProcessor:
             raise
 
     def _get_sheet_id(self, sheet_name: str) -> int:
-        """Get the sheet ID for a given sheet name."""
+        """Get the sheet ID for a given sheet name (cached to avoid 429 quota exhaustion)."""
+        if not hasattr(self, '_sheet_ids_cache'):
+            self._sheet_ids_cache = {}
+        if sheet_name in self._sheet_ids_cache:
+            return self._sheet_ids_cache[sheet_name]
+
         sheet_metadata = self.service.get(spreadsheetId=self.spreadsheet_id).execute()
         for sheet in sheet_metadata.get('sheets', []):
-            if sheet['properties']['title'] == sheet_name:
-                return sheet['properties']['sheetId']
+            title = sheet['properties']['title']
+            s_id = sheet['properties']['sheetId']
+            self._sheet_ids_cache[title] = s_id
+
+        if sheet_name in self._sheet_ids_cache:
+            return self._sheet_ids_cache[sheet_name]
         raise ValueError(f"Sheet {sheet_name} not found")
 
     def update_sheet_in_batches(self, sheet_name: str, data: List[List], id_column: str):
@@ -691,6 +706,7 @@ class FeedProcessor:
                 # Delete duplicate rows
                 if rows_to_delete:
                     rows_to_delete.sort(reverse=True)  # Delete from bottom up
+                    target_sheet_id = self._get_sheet_id(sheet_name)
 
                     # Delete in batches
                     batch_size = 20
@@ -702,7 +718,7 @@ class FeedProcessor:
                             requests.append({
                                 'deleteDimension': {
                                     'range': {
-                                        'sheetId': self._get_sheet_id(sheet_name),
+                                        'sheetId': target_sheet_id,
                                         'dimension': 'ROWS',
                                         'startIndex': row_index,  # Row index is already 1-based
                                         'endIndex': row_index + 1  # End is exclusive

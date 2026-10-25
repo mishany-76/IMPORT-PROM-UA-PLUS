@@ -455,6 +455,10 @@ class FeedProcessor:
         """
         try:
             sheet_data = self.get_sheet_data(sheet_name)
+            if not current_ids:
+                logger.warning(f"current_ids пусто для {sheet_name}. Пропуск удаления для защиты от стирания данных.")
+                return
+
             if not sheet_data:
                 return
 

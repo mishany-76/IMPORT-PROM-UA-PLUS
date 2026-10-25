@@ -444,6 +444,10 @@ class FeedProcessor:
         """
         try:
             sheet_data = self.get_sheet_data(sheet_name)
+            if not current_ids:
+                logger.warning(f"current_ids пусто для {sheet_name}. Пропуск удаления для защиты от стирания данных.")
+                return
+
             if not sheet_data:
                 return
 
@@ -495,11 +499,20 @@ class FeedProcessor:
             raise
 
     def _get_sheet_id(self, sheet_name: str) -> int:
-        """Get the sheet ID for a given sheet name."""
+        """Get the sheet ID for a given sheet name (cached to avoid 429 quota exhaustion)."""
+        if not hasattr(self, '_sheet_ids_cache'):
+            self._sheet_ids_cache = {}
+        if sheet_name in self._sheet_ids_cache:
+            return self._sheet_ids_cache[sheet_name]
+
         sheet_metadata = self.service.get(spreadsheetId=self.spreadsheet_id).execute()
         for sheet in sheet_metadata.get('sheets', []):
-            if sheet['properties']['title'] == sheet_name:
-                return sheet['properties']['sheetId']
+            title = sheet['properties']['title']
+            s_id = sheet['properties']['sheetId']
+            self._sheet_ids_cache[title] = s_id
+
+        if sheet_name in self._sheet_ids_cache:
+            return self._sheet_ids_cache[sheet_name]
         raise ValueError(f"Sheet {sheet_name} not found")
 
     def update_sheet_in_batches(self, sheet_name: str, data: List[List], id_column: str):
