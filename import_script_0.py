@@ -1857,15 +1857,53 @@ CATEGORY_PORTAL_MAP = {
 def resolve_portal_category(supp_cat_id: str, title: str, supplier_name: str) -> str:
     """
     Принудительно сопоставляет категорию поставщика с точным ID категории Prom.ua (Ідентифікатор_підрозділу).
-    Включает эвристическую защиту от аномалий названий (SALE / РОЗПРОДАЖ, плюшевые брелоки и т.д.).
+    Включает эвристическую защиту от аномалий названий (SALE / РОЗПРОДАЖ, плюшевые брелоки, конструкторы и т.д.).
     """
     cat_key = str(supp_cat_id).strip()
-    if cat_key in CATEGORY_PORTAL_MAP:
-        return CATEGORY_PORTAL_MAP[cat_key]
-
     title_lower = str(title).lower().strip()
 
-    # Детекция детской обуви для портала Prom.ua
+    # 1. Специфические эвристики для KIRS (галантерея, сумки, брелоки, игрушки, детское творчество)
+    # Поставщик KIRS НИКОГДА не продает обувь!
+    if supplier_name == "KIRS":
+        if any(w in title_lower for w in ["конструктор", "лего", "plants vs zombies", "among us", "rainbow friends", "тетріс"]):
+            return "2614"     # конструктори
+        if any(w in title_lower for w in ["пазл"]):
+            return "180613"   # пазли і головоломки
+        if any(w in title_lower for w in ["планшет", "дошка для мистецтва", "дошка для малювання"]):
+            return "21111105" # художні планшети для малювання
+        if any(w in title_lower for w in ["пісок", "піск", "песок", "песк", "кінетич", "кинетич"]):
+            return "2642"     # іграшки для ігор з піском, водою та снігом
+        if any(w in title_lower for w in ["браслет", "бісер", "рукоділ", "творчост", "мозайк"]):
+            return "15011904" # товари для дитячої творчості
+        if any(w in title_lower for w in ["сидіння", "накладка"]):
+            return "270303"   # дитячі горщики, сидіння для унітазу
+        if any(w in title_lower for w in ["рюкзак"]):
+            if any(w in title_lower for w in ["дитяч", "детск"]):
+                return "380501"  # дитячі сумки і рюкзаки
+            return "380601"      # міські та спортивні рюкзаки
+        if any(w in title_lower for w in ["брелок", "брелоч"]):
+            return "170702"   # брелоки
+        if any(w in title_lower for w in ["іграшк", "игрушк", "плюшев", "хаггі", "кісі місі", "розвиваючий столик", "фігурк"]):
+            return "2604"     # м'які та дитячі іграшки
+        if any(w in title_lower for w in ["гаманець", "кошелек", "портмоне", "зажим", "клатч"]):
+            return "152405"   # гаманці та портмоне
+        if any(w in title_lower for w in ["бананка", "на пояс", "крос-боді", "кросс-боди"]):
+            return "380650"   # поясні сумки
+        if any(w in title_lower for w in ["ремінь", "ремень", "пояс"]):
+            return "32801"    # ремені та пояси
+        if any(w in title_lower for w in ["сумка", "барсетка", "мессенджер", "портфель"]):
+            return "152411"   # чоловічі сумки
+        if any(w in title_lower for w in ["дитяч", "детск"]):
+            return "380501"   # дитячі сумки і рюкзаки
+        if cat_key in CATEGORY_PORTAL_MAP:
+            return CATEGORY_PORTAL_MAP[cat_key]
+        return "152411"
+
+    # 2. Детекция детской обуви для портала Prom.ua (строго для обувных категорий/поставщиков)
+    footwear_markers = ["взуття", "обув", "кросівк", "кроссовк", "кед", "ботинк", "черевик", "чобот", "угг", "босоніж", "сандал", "шльоп", "шлеп", "сабо", "сланц", "в'єтнам", "вьетнам", "туфл", "лофер", "сліпон", "слипон", "мокасин", "капці", "тапочк"]
+    is_footwear_supp = supplier_name in ["AGER", "IZIDROP", "MOYDROP", "SPECULANT"]
+    has_footwear_title = any(w in title_lower for w in footwear_markers)
+
     if any(w in title_lower for w in ["дівч", "девоч", "девч", "хлопч", "хлоп’", "хлоп'", "мальч", "дитяч", "детск", "підлітк", "подростк", "малюк", "малыш"]):
         if any(w in title_lower for w in ["кросівк", "кроссовк", "кед"]):
             return "3221214"  # дитячі та підліткові кросівки, кеди
@@ -1873,34 +1911,20 @@ def resolve_portal_category(supp_cat_id: str, title: str, supplier_name: str) ->
             return "3221211"  # дитяче та підліткове зимове взуття
         if any(w in title_lower for w in ["босоніж", "сандал", "шльоп", "шлеп", "сабо", "літн", "летн"]):
             return "3221206"  # дитяче та підліткове літнє взуття
-        return "3221299"      # дитяче та підліткове взуття, загальне
+        if is_footwear_supp or has_footwear_title:
+            return "3221299"  # дитяче та підліткове взуття, загальне
 
-    # Специфические эвристики для IZIDROP (только обувь)
+    # 3. Базовый маппинг по ID категории поставщика
+    if cat_key in CATEGORY_PORTAL_MAP:
+        return CATEGORY_PORTAL_MAP[cat_key]
+
+    # 4. Специфические эвристики для IZIDROP (только обувь)
     if supplier_name == "IZIDROP":
         if any(w in title_lower for w in ["зимов", "winter", "угг", "ботинк", "черевик"]):
             return "3220413"  # чоловічі черевики
         if any(w in title_lower for w in ["crocs", "крокс", "сланц", "шльоп", "сабо"]):
             return "34304"    # взуття для пляжу та басейну
         return "3220713"      # кросівки та кеди (дефолт для всего ассортимента IZIDROP)
-
-    # Специфические эвристики для KIRS (галантерея, сумки, игрушки)
-    if supplier_name == "KIRS":
-        if any(w in title_lower for w in ["брелок", "брелоч"]):
-            return "170702"  # брелоки
-        if any(w in title_lower for w in ["іграшк", "игрушк", "плюшев"]):
-            return "2604"    # м'які іграшки
-        if any(w in title_lower for w in ["дитяч", "детск"]):
-            return "380501"  # дитячі сумки і рюкзаки
-        if any(w in title_lower for w in ["гаманець", "кошелек", "портмоне", "зажим", "клатч"]):
-            return "152405"  # гаманці та портмоне
-        if any(w in title_lower for w in ["бананка", "на пояс", "крос-боді", "кросс-боди"]):
-            return "380650"  # поясні сумки
-        if any(w in title_lower for w in ["рюкзак"]):
-            return "380601"  # міські та спортивні рюкзаки
-        if any(w in title_lower for w in ["ремінь", "ремень", "пояс"]):
-            return "32801"   # ремені та пояси
-        if any(w in title_lower for w in ["сумка", "барсетка", "мессенджер", "портфель"]):
-            return "152411"  # чоловічі сумки
 
     # Специфические эвристики для BAGSROOM (сумки, рюкзаки, чемоданы)
     if supplier_name == "BAGSROOM":

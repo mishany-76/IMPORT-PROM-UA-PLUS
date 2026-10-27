@@ -8,3 +8,6 @@ key_sheet.json
 # Python
 __pycache__/
 .venv/
+
+# Backups
+backup_2026*
