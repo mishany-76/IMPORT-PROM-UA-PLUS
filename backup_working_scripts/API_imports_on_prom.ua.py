@@ -112,6 +112,39 @@ def upload_to_r2(data):
     print(f"   Файл доступен по ссылке: {PUBLIC_URL}")
 
 
+def check_prom_import_status(import_id, token, store_name, max_checks=6, delay=10):
+    """Проверяет статус фонового импорта в Prom API"""
+    if not import_id or import_id == 'N/A':
+        return
+
+    status_url = f"https://my.prom.ua/api/v1/products/import/status/{import_id}"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Language': 'uk'
+    }
+
+    for attempt in range(1, max_checks + 1):
+        time.sleep(delay)
+        try:
+            res = requests.get(status_url, headers=headers, timeout=30)
+            if res.status_code == 200:
+                data = res.json()
+                status = data.get('status', 'UNKNOWN')
+                updated = data.get('updated', 0)
+                not_changed = data.get('not_changed', 0)
+                errors_cnt = data.get('with_errors_count', 0)
+                print(f"      [Статус Prom] {store_name} (Попытка {attempt}/{max_checks}): Статус = {status} | Обновлено: {updated} | Без изменений: {not_changed} | С ошибками: {errors_cnt}")
+                if status in ['SUCCESS', 'PARTIAL', 'FATAL']:
+                    if errors_cnt > 0 and 'errors' in data:
+                        print(f"      [Детализация ошибок] {data.get('errors')}")
+                    break
+            else:
+                print(f"      [Статус Prom] {store_name}: HTTP {res.status_code} при проверке статуса")
+        except Exception as e:
+            print(f"      [Статус Prom] Ошибка при проверке статуса для {store_name}: {e}")
+            break
+
+
 def trigger_prom_import():
     """
     Запуск асинхронного импорта контента в магазины Prom.ua по строго утвержденному стандарту Эшелона 2.
@@ -120,23 +153,29 @@ def trigger_prom_import():
     import_url = "https://my.prom.ua/api/v1/products/import_url"
 
     # СТАНДАРТ ЭШЕЛОНА 2:
-    # only_update = True  -> обновлять только существующие позиции (не плодить дубли)
-    # mark_missing_product_as = 'none' -> отсутствующие товары НЕ удалять и НЕ скрывать
+    # only_update = False -> РАЗРЕШАЕТ обновлять все поля (поисковые запросы, фото, описания, названия)
+    # mark_missing_product_as = 'deleted' -> отсутствующие в файле товары УДАЛЯТЬ (полная синхронизация каталога)
     # force_update = True -> принудительное обновление контента
-    # updated_fields -> строгий белый список (SEO-слова, названия, описания с таблицами)
+    # updated_fields -> строгий белый список Prom OpenAPI: SEO-запросы, названия, описания, фото, цены, скидки, наличие, остатки, ярлыки
     payload = {
         "url": PUBLIC_URL,
         "force_update": True,
         "only_available": False,
-        "only_update": True,
-        "mark_missing_product_as": "none",
+        "only_update": False,
+        "mark_missing_product_as": "deleted",
         "updated_fields": [
-            "keywords",
-            "keywords_ua",
             "name",
             "name_ua",
             "description",
-            "description_ua"
+            "description_ua",
+            "keywords",
+            "keywords_ua",
+            "images_urls",
+            "price",
+            "discount",
+            "presence",
+            "quantity_in_stock",
+            "labels"
         ]
     }
 
@@ -177,6 +216,8 @@ def trigger_prom_import():
                 import_id = data.get('id', 'N/A')
                 print(f"   [OK] {store_name}: Импорт успешно запущен на Prom.ua! ID задачи: {import_id}")
                 active_dispatches += 1
+                # Проверка статуса выполнения задачи в Prom API
+                check_prom_import_status(import_id, token, store_name)
             else:
                 print(f"   [Error] {store_name}: HTTP {response.status_code} - {response.text}")
         except Exception as e:

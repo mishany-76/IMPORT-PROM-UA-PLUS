@@ -8,8 +8,9 @@
 
 | Файл | Название | Версия | Описание |
 | :--- | :--- | :--- | :--- |
-| **`Import_table_rewrite.js`** | Smart Prom Engine | **V2.6** | Пакетный генератор SEO-ключевых слов и локализации на базе OmniRoute (`gpt-4.1-mini`). Обрабатывает батчи по 3 товара (2 итерации за запуск, 6 товаров за 5 минут). |
+| **`Import_table_rewrite.js`** | Smart Prom Engine | **V2.7** | Мультимодельный генератор SEO-ключевых слов (GPT-5.4-mini / GPT-4.1-mini). Всеядный экстрактор произвольной вложенности JSON, 50-65 поисковых фраз, порог >=500 симв., защита от зависаний (Anti-Deadlock). |
 | **`Orchestrator.js`** | Smart Orchestrator & Watchdog | **V2.1** | Слушатель изменений таблицы (`onChangeTrigger`). Выжидает 10 минут (debounce), находит первую незаполненную строку и автоматически запускает `main()`. Защищен мьютексом `SCRIPT_STATUS`. |
+| **`Prom_Chronos_Dispatcher.js`** | Prom Chronos Dispatcher | **V1.0** | Точный планировщик запуска GitHub Actions по Киеву (06:00, 12:00, 19:00). Обходит задержки cron GitHub, вызывая REST API (`workflow_dispatch`). Включает меню в Google Таблице и ручной запуск в 1 клик. |
 
 ---
 
